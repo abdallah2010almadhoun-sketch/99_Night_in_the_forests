@@ -8,6 +8,7 @@ const joystickZone = document.getElementById('joystickZone');
 const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
 const lookZone = document.getElementById('lookZone');
+const attackBtn = document.getElementById('attackBtn');
 const overlay = document.getElementById('startOverlay');
 const startBtn = document.getElementById('startBtn');
 
@@ -148,10 +149,27 @@ playerBody.position.y = 1.1;
 playerBody.castShadow = true;
 player.add(playerBody);
 
-const playerGlow = new THREE.PointLight(0x7cc0ff, 0.5, 12, 2);
+const lantern = new THREE.Mesh(
+  new THREE.SphereGeometry(0.17, 8, 8),
+  new THREE.MeshStandardMaterial({ color: 0xffc66e, emissive: 0xff8a26, emissiveIntensity: 2.1, roughness: 0.4 })
+);
+lantern.position.set(0.48, 1.05, 0.34);
+player.add(lantern);
+
+const playerGlow = new THREE.PointLight(0xffc071, 0.8, 14, 2);
 playerGlow.position.set(0, 1.5, 0);
 player.add(playerGlow);
 
+const strikeArc = new THREE.Mesh(
+  new THREE.TorusGeometry(1.05, 0.055, 5, 24),
+  new THREE.MeshBasicMaterial({ color: 0xffc66e, transparent: true, opacity: 0.8 })
+);
+strikeArc.rotation.x = Math.PI / 2;
+strikeArc.position.set(0, 0.9, 0.85);
+strikeArc.visible = false;
+player.add(strikeArc);
+
+playerBody.scale.set(0.78, 0.78, 0.78);
 player.position.set(0, 0, 4);
 
 const enemies = [];
@@ -159,7 +177,7 @@ const enemyMat = new THREE.MeshStandardMaterial({ color: 0x2a343f, roughness: 0.
 
 function makeEnemy() {
   const enemy = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.37, 1.15, 4, 7), enemyMat);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.37, 1.15, 4, 7), enemyMat.clone());
   body.position.y = 1.1;
   body.castShadow = true;
   enemy.add(body);
@@ -177,9 +195,12 @@ function makeEnemy() {
     (Math.random() - 0.5) * 75
   );
   enemy.userData = {
+    body,
     speed: 1.1 + Math.random() * 0.8,
     attackCooldown: 0,
-    health: 1,
+    health: 2,
+    hitTimer: 0,
+    respawnTimer: 0,
     phase: Math.random() * Math.PI * 2
   };
   scene.add(enemy);
@@ -188,6 +209,23 @@ function makeEnemy() {
 }
 
 for (let i = 0; i < 8; i += 1) makeEnemy();
+
+// A warm pool of light and a trail of smoke make the home point visible through the fog.
+const fireFlame = new THREE.Mesh(
+  new THREE.ConeGeometry(0.3, 0.9, 7),
+  new THREE.MeshBasicMaterial({ color: 0xffb44d })
+);
+fireFlame.position.set(0, 1.1, 0);
+campfire.add(fireFlame);
+
+const smokePuffs = [];
+const smokeMaterial = new THREE.MeshBasicMaterial({ color: 0x9ca9a2, transparent: true, opacity: 0.15 });
+for (let i = 0; i < 4; i += 1) {
+  const puff = new THREE.Mesh(new THREE.SphereGeometry(0.18 + i * 0.025, 6, 6), smokeMaterial.clone());
+  puff.position.y = 1.6 + i * 0.45;
+  campfire.add(puff);
+  smokePuffs.push(puff);
+}
 
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(110, 24, 24),
@@ -211,6 +249,10 @@ const state = {
   maxNight: 99,
   health: 100,
   damageFlash: 0,
+  attackCooldown: 0,
+  attackTimer: 0,
+  nearFire: true,
+  keys: new Set(),
   joystick: { x: 0, y: 0, active: false },
   look: { active: false, x: 0, y: 0, lastX: 0, lastY: 0 },
   cameraYaw: 0,
@@ -228,16 +270,21 @@ function clamp(value, min, max) {
 function updateHud() {
   nightText.textContent = String(state.night);
   healthText.textContent = String(Math.max(0, Math.ceil(state.health)));
+  const healthPanel = healthText.closest('.panel');
+  healthPanel?.style.setProperty('--health-ratio', `${clamp(state.health, 0, 100)}%`);
 
-  if (state.health > 60) {
-    statusText.textContent = 'Campfire holds';
-    statusText.style.color = '#8aec9b';
-  } else if (state.health > 25) {
-    statusText.textContent = 'Under attack';
-    statusText.style.color = '#ffba58';
-  } else {
+  if (state.health <= 25) {
     statusText.textContent = 'Fading fast';
     statusText.style.color = '#ff5d5d';
+  } else if (state.health <= 60) {
+    statusText.textContent = 'Under attack';
+    statusText.style.color = '#ffba58';
+  } else if (state.nearFire) {
+    statusText.textContent = 'Safe by the fire';
+    statusText.style.color = '#8aec9b';
+  } else {
+    statusText.textContent = 'Stay near the fire';
+    statusText.style.color = '#ffba58';
   }
 }
 
@@ -327,6 +374,10 @@ function startGame() {
   state.health = 100;
   state.night = 1;
   state.nightTimer = 0;
+  state.attackCooldown = 0;
+  state.attackTimer = 0;
+  state.nearFire = true;
+  state.keys.clear();
   state.cameraYaw = 0;
   state.cameraPitch = 0;
   player.position.set(0, 0, -3.5);
@@ -334,15 +385,36 @@ function startGame() {
     const angle = Math.random() * Math.PI * 2;
     const radius = 20 + Math.random() * 22;
     enemy.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+    enemy.visible = true;
     enemy.userData.attackCooldown = 0;
+    enemy.userData.health = 2;
+    enemy.userData.hitTimer = 0;
+    enemy.userData.respawnTimer = 0;
+    enemy.userData.body.material.color.setHex(0x2a343f);
   }
+  strikeArc.visible = false;
   updateHud();
 }
 
 startBtn.addEventListener('click', startGame);
 
-overlay.addEventListener('pointerdown', () => {
-  if (!state.started) startGame();
+const blockedKeys = new Set([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
+window.addEventListener('keydown', (event) => {
+  const key = event.key.toLowerCase();
+  if (blockedKeys.has(key)) event.preventDefault();
+  if (key === ' ' && !event.repeat) attack();
+  state.keys.add(key);
+});
+window.addEventListener('keyup', (event) => state.keys.delete(event.key.toLowerCase()));
+window.addEventListener('blur', () => state.keys.clear());
+
+attackBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  attack();
+});
+
+overlay.addEventListener('pointerdown', (event) => {
+  if (!state.started && event.target === overlay) startGame();
 });
 
 function resetToMenu(title, subtitle, hint, buttonText) {
@@ -351,6 +423,37 @@ function resetToMenu(title, subtitle, hint, buttonText) {
   overlay.querySelector('.subtitle').textContent = subtitle;
   overlay.querySelector('.hint').textContent = hint;
   overlay.querySelector('button').textContent = buttonText;
+}
+
+function attack() {
+  if (!state.started || state.gameOver || state.attackCooldown > 0) return;
+
+  state.attackCooldown = 0.62;
+  state.attackTimer = 0.24;
+  strikeArc.visible = true;
+  strikeArc.scale.setScalar(0.7);
+  playerGlow.intensity = 1.8;
+
+  const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+  for (const enemy of enemies) {
+    if (!enemy.visible) continue;
+    const offset = enemy.position.clone().sub(player.position);
+    const distance = offset.length();
+    if (distance > 3.6 || distance < 0.01) continue;
+    offset.normalize();
+    if (forward.dot(offset) < 0.28) continue;
+
+    const data = enemy.userData;
+    data.health -= 1;
+    data.hitTimer = 0.2;
+    data.body.material.color.setHex(0xff8a55);
+    enemy.position.addScaledVector(forward, 0.2);
+    if (data.health <= 0) {
+      enemy.visible = false;
+      data.respawnTimer = 5;
+      data.attackCooldown = 0;
+    }
+  }
 }
 
 function spawnNightWave() {
@@ -363,6 +466,11 @@ function spawnNightWave() {
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
     enemy.position.set(x, 0, z);
+    enemy.visible = true;
+    enemy.userData.health = 2;
+    enemy.userData.hitTimer = 0;
+    enemy.userData.respawnTimer = 0;
+    enemy.userData.body.material.color.setHex(0x2a343f);
     enemy.userData.speed = 1.1 + Math.random() * 0.9 + state.night * 0.06;
   }
 
@@ -379,8 +487,11 @@ function getCampfireInfluence() {
 
 function movePlayer(delta) {
   if (!state.started || state.gameOver) return;
-  const moveX = state.joystick.x;
-  const moveY = state.joystick.y;
+  const keys = state.keys;
+  const keyX = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
+  const keyY = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0);
+  const moveX = clamp(state.joystick.x + keyX, -1, 1);
+  const moveY = clamp(-state.joystick.y + keyY, -1, 1);
   if (Math.abs(moveX) + Math.abs(moveY) < 0.02) return;
 
   const forward = new THREE.Vector3(Math.sin(state.cameraYaw), 0, Math.cos(state.cameraYaw));
@@ -391,8 +502,9 @@ function movePlayer(delta) {
 
   const lenSq = moveDir.lengthSq();
   if (lenSq > 0) {
-    moveDir.normalize().multiplyScalar(delta * 5.8);
-    player.position.add(moveDir);
+    moveDir.normalize();
+    player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+    player.position.addScaledVector(moveDir, delta * 5.8);
   }
 
   player.position.x = clamp(player.position.x, -30, 30);
@@ -404,6 +516,24 @@ function updateEnemies(delta) {
 
   for (const enemy of enemies) {
     const data = enemy.userData;
+    if (!enemy.visible) {
+      data.respawnTimer -= delta;
+      if (data.respawnTimer <= 0) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 20 + Math.random() * 18;
+        enemy.position.set(player.position.x + Math.cos(angle) * radius, 0, player.position.z + Math.sin(angle) * radius);
+        data.health = 2;
+        data.hitTimer = 0;
+        enemy.visible = true;
+      }
+      continue;
+    }
+
+    if (data.hitTimer > 0) {
+      data.hitTimer -= delta;
+      if (data.hitTimer <= 0) data.body.material.color.setHex(0x2a343f);
+    }
+
     const toPlayer = player.position.clone().sub(enemy.position);
     const dist = toPlayer.length();
 
@@ -430,6 +560,7 @@ function updateEnemies(delta) {
 
 function updateCampfire(delta) {
   const safe = getCampfireInfluence() > 0;
+  state.nearFire = safe;
   if (safe) {
     state.health = clamp(state.health + delta * 5.5, 0, 100);
     statusText.textContent = 'Campfire holds';
@@ -445,6 +576,14 @@ function updateCampfire(delta) {
   const t = performance.now() * 0.001;
   fireCore.position.y = 0.84 + Math.sin(t * 6) * 0.09;
   fireCore.rotation.y += delta * 2.4;
+  fireFlame.scale.set(0.82 + Math.sin(t * 11) * 0.14, 0.85 + Math.sin(t * 8) * 0.18, 0.82 + Math.sin(t * 9) * 0.14);
+  for (let i = 0; i < smokePuffs.length; i += 1) {
+    const puff = smokePuffs[i];
+    const phase = (t * 0.42 + i / smokePuffs.length) % 1;
+    puff.position.set(Math.sin(t * 1.4 + i) * 0.14, 1.45 + phase * 2.1, Math.cos(t * 1.2 + i) * 0.12);
+    puff.scale.setScalar(0.7 + phase * 1.4);
+    puff.material.opacity = 0.18 * (1 - phase);
+  }
 
   if (state.started && !state.gameOver && state.health > 0) {
     const playerGlowPulse = 0.48 + Math.sin(t * 14) * 0.2;
@@ -455,13 +594,14 @@ function updateCampfire(delta) {
 function updateNight(delta) {
   state.nightTimer += delta;
   if (state.nightTimer >= 18) {
+    state.nightTimer -= 18;
     state.night += 1;
-    state.nightTimer = 0;
     if (state.night > state.maxNight) {
+      state.night = state.maxNight;
       state.victory = true;
       state.started = false;
       state.gameOver = true;
-      resetToMenu('You Survived', `99 nights survived. The camp still burns.`, 'Tap to begin a new run.', 'Play Again');
+      resetToMenu('You Survived', '99 nights survived. The camp still burns.', 'Tap to begin a new run.', 'Play Again');
       return;
     }
     spawnNightWave();
@@ -492,6 +632,15 @@ function updateOnGameOver() {
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.033);
+
+  state.attackCooldown = Math.max(0, state.attackCooldown - delta);
+  state.attackTimer = Math.max(0, state.attackTimer - delta);
+  strikeArc.visible = state.attackTimer > 0;
+  if (state.attackTimer > 0) {
+    const progress = 1 - state.attackTimer / 0.24;
+    strikeArc.scale.setScalar(0.7 + progress * 0.55);
+    strikeArc.material.opacity = 0.8 * (1 - progress);
+  }
 
   if (state.started && !state.gameOver) {
     movePlayer(delta);
