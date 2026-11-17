@@ -853,7 +853,7 @@ function pickUpItem(item) {
 }
 
 function dropCarriedItems() {
-  if (!state.started || state.gameOver || state.falling || state.dropCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused || state.dropCooldown > 0) return;
 
   if (carriedItems.length > 0) {
     const items = carriedItems.splice(0, carriedItems.length);
@@ -953,7 +953,7 @@ function chopTree(tree) {
 }
 
 function interact() {
-  if (!state.started || state.gameOver || state.falling || state.interactCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused || state.interactCooldown > 0) return;
 
   if (state.fireInReach && carriedItems.length > 0 && state.fuel < 99.5) {
     throwCarriedIntoFire();
@@ -1005,11 +1005,11 @@ function updateGroundItems(delta) {
       const index = carriedItems.indexOf(item);
       const spread = (index - (carriedItems.length - 1) / 2) * 0.62;
       const angle = player.rotation.y + Math.PI + spread + Math.sin(now * 0.0012) * 0.05;
-      const distance = 0.78;
+      const distance = 0.95;
       const targetX = player.position.x + Math.sin(angle) * distance;
       const targetZ = player.position.z + Math.cos(angle) * distance;
-      const targetY = player.position.y + 1.62 + index * 0.16
-        + Math.sin(now * 0.003 + index) * 0.05;
+      const targetY = getGroundHeight(targetX, targetZ) + 0.52 + index * 0.06
+        + Math.sin(now * 0.003 + index) * 0.04;
       const damping = 1 - Math.exp(-8 * delta);
       item.mesh.position.x += (targetX - item.mesh.position.x) * damping;
       item.mesh.position.y += (targetY - item.mesh.position.y) * damping;
@@ -1059,7 +1059,7 @@ function markChoppable(tree) {
 }
 
 function plantSapling() {
-  if (!state.started || state.gameOver || state.falling || state.plantCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused || state.plantCooldown > 0) return;
   const carriedIndex = carriedItems.findIndex((item) => item.type === 'sapling');
   if (carriedIndex < 0) {
     showToast('Carry a sapling to plant it');
@@ -1607,7 +1607,7 @@ function eatBackpackBerry() {
 }
 
 function equipTool(tool) {
-  if (!state.started || state.gameOver || state.falling) return;
+  if (!state.started || state.gameOver || state.falling || state.paused) return;
 
   if (tool === 'backpack' && state.equippedTool === 'backpack') {
     setInventoryOpen(!state.inventoryOpen);
@@ -2034,7 +2034,7 @@ function resetToMenu(title, subtitle, hint, buttonText) {
 }
 
 function attack() {
-  if (!state.started || state.gameOver || state.falling || state.attackCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused || state.attackCooldown > 0) return;
   if (state.equippedTool !== 'axe') {
     showToast('Equip the axe to attack');
     return;
