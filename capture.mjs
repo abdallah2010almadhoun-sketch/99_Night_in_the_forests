@@ -60,9 +60,9 @@ try {
       await page.locator('#game').waitFor({ state: 'visible' })
       await page.waitForFunction(() => {
         const canvas = document.querySelector('#game')
-        const hud = document.querySelector('#nightText')
+        const hud = document.querySelector('#nightText')?.textContent?.trim() ?? ''
         const rect = canvas?.getBoundingClientRect()
-        return !!canvas && canvas.width > 0 && canvas.height > 0 && !!rect && rect.width > 0 && rect.height > 0 && hud?.textContent?.trim() === '1'
+        return !!canvas && canvas.width > 0 && canvas.height > 0 && !!rect && rect.width > 0 && rect.height > 0 && /^\d+\s*\/\s*99$/.test(hud)
       })
       await page.waitForFunction(() => document.fonts.status === 'loaded')
     })
