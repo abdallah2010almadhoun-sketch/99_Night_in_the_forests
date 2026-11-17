@@ -495,7 +495,7 @@ function movePlayer(delta) {
   if (Math.abs(moveX) + Math.abs(moveY) < 0.02) return;
 
   const forward = new THREE.Vector3(Math.sin(state.cameraYaw), 0, Math.cos(state.cameraYaw));
-  const right = new THREE.Vector3(Math.cos(state.cameraYaw), 0, -Math.sin(state.cameraYaw));
+  const right = new THREE.Vector3(-Math.cos(state.cameraYaw), 0, Math.sin(state.cameraYaw));
   const moveDir = new THREE.Vector3();
   moveDir.addScaledVector(forward, moveY);
   moveDir.addScaledVector(right, moveX);
