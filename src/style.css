@@ -188,12 +188,12 @@ button:active {
 
 #attackBtn {
   position: fixed;
-  right: max(24px, env(safe-area-inset-right));
-  bottom: max(34px, env(safe-area-inset-bottom));
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(142px, calc(env(safe-area-inset-bottom) + 142px));
   z-index: 18;
   margin: 0;
-  min-width: 112px;
-  padding: 15px 18px;
+  min-width: 106px;
+  padding: 12px 16px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255, 190, 94, 0.42), rgba(108, 48, 23, 0.72));
   box-shadow: 0 0 26px rgba(255, 157, 57, 0.32), inset 0 1px rgba(255, 255, 255, 0.2);
@@ -201,7 +201,30 @@ button:active {
   touch-action: none;
 }
 
-#attackBtn span {
+#jumpBtn {
+  position: fixed;
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(28px, env(safe-area-inset-bottom));
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 102px;
+  height: 102px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  border-color: rgba(166, 241, 208, 0.6);
+  background: linear-gradient(180deg, rgba(91, 199, 157, 0.46), rgba(22, 74, 68, 0.8));
+  box-shadow: 0 0 28px rgba(75, 214, 164, 0.28), inset 0 1px rgba(255, 255, 255, 0.2);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  touch-action: none;
+}
+
+#attackBtn span,
+#jumpBtn span {
   display: block;
   margin-top: 3px;
   color: var(--muted);
@@ -264,9 +287,17 @@ button:active {
 
   #attackBtn {
     right: 18px;
-    bottom: max(28px, env(safe-area-inset-bottom));
-    min-width: 96px;
-    padding: 13px 15px;
+    bottom: calc(env(safe-area-inset-bottom) + 130px);
+    min-width: 92px;
+    padding: 11px 14px;
     font-size: 14px;
+  }
+
+  #jumpBtn {
+    right: 18px;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    width: 94px;
+    height: 94px;
+    font-size: 16px;
   }
 }

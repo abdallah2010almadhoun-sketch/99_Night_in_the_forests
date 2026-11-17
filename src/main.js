@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const canvas = document.getElementById('game');
 const nightText = document.getElementById('nightText');
@@ -9,11 +10,12 @@ const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
 const lookZone = document.getElementById('lookZone');
 const attackBtn = document.getElementById('attackBtn');
+const jumpBtn = document.getElementById('jumpBtn');
 const overlay = document.getElementById('startOverlay');
 const startBtn = document.getElementById('startBtn');
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -29,11 +31,29 @@ const clock = new THREE.Clock();
 const world = new THREE.Group();
 scene.add(world);
 
+// Gentle rolling ground keeps the campfire clearing flat while giving the player
+// broad, easy-to-climb slopes farther out in the forest.
+function getGroundHeight(x, z) {
+  const radius = Math.hypot(x, z);
+  const inner = Math.min(Math.max((radius - 8) / 10, 0), 1);
+  const outer = Math.min(Math.max((62 - radius) / 8, 0), 1);
+  const waves = Math.sin(x * 0.11 + 0.7) * Math.cos(z * 0.1 - 0.35) * 0.55
+    + Math.sin((x + z) * 0.055 - 0.6) * 0.35;
+  return waves * inner * outer;
+}
+
+const groundGeometry = new THREE.PlaneGeometry(130, 130, 56, 56);
+groundGeometry.rotateX(-Math.PI / 2);
+const groundPositions = groundGeometry.attributes.position;
+for (let i = 0; i < groundPositions.count; i += 1) {
+  groundPositions.setY(i, getGroundHeight(groundPositions.getX(i), groundPositions.getZ(i)));
+}
+groundGeometry.computeVertexNormals();
+
 const plane = new THREE.Mesh(
-  new THREE.CircleGeometry(65, 48),
+  groundGeometry,
   new THREE.MeshStandardMaterial({ color: 0x10251f, roughness: 1, metalness: 0 })
 );
-plane.rotation.x = -Math.PI / 2;
 plane.receiveShadow = true;
 world.add(plane);
 
@@ -110,7 +130,9 @@ function createTree(x, z, scale = 1) {
   foliage.receiveShadow = true;
   tree.add(foliage);
 
-  tree.position.set(x, 0, z);
+  tree.position.set(x, getGroundHeight(x, z), z);
+  tree.userData.scale = scale;
+  tree.userData.cameraMeshes = [trunk, foliage];
   world.add(tree);
   treeData.push(tree);
   return tree;
@@ -131,7 +153,9 @@ for (let i = 0; i < 120; i += 1) {
     new THREE.BoxGeometry(0.12, 0.16, 0.12),
     new THREE.MeshStandardMaterial({ color: 0x173627, roughness: 1 })
   );
-  mesh.position.set((Math.random() - 0.5) * 90, 0.08, (Math.random() - 0.5) * 90);
+  const x = (Math.random() - 0.5) * 90;
+  const z = (Math.random() - 0.5) * 90;
+  mesh.position.set(x, getGroundHeight(x, z) + 0.08, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   world.add(mesh);
@@ -141,23 +165,96 @@ for (let i = 0; i < 120; i += 1) {
 const player = new THREE.Group();
 scene.add(player);
 
-const playerBody = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.42, 1.2, 4, 8),
-  new THREE.MeshStandardMaterial({ color: 0x8faec4, roughness: 0.75, metalness: 0.1 })
+const avatar = new THREE.Group();
+avatar.position.y = 0.01;
+player.add(avatar);
+
+const skinMaterial = new THREE.MeshStandardMaterial({
+  color: 0xffd63f,
+  emissive: 0x3b2900,
+  emissiveIntensity: 0.38,
+  roughness: 0.38,
+  metalness: 0.03
+});
+const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x2f6fd2, roughness: 0.4, metalness: 0.03 });
+const pantsMaterial = new THREE.MeshStandardMaterial({ color: 0x38994b, roughness: 0.42, metalness: 0.03 });
+const faceMaterial = new THREE.MeshStandardMaterial({ color: 0x121518, roughness: 0.5, metalness: 0 });
+
+function makeAvatarPart(width, height, depth, material, radius = 0.035) {
+  const mesh = new THREE.Mesh(
+    new RoundedBoxGeometry(width, height, depth, 2, radius),
+    material
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+const torso = makeAvatarPart(0.84, 0.86, 0.44, shirtMaterial, 0.045);
+torso.position.y = 1.27;
+avatar.add(torso);
+
+const headGroup = new THREE.Group();
+headGroup.position.y = 2;
+avatar.add(headGroup);
+
+const head = makeAvatarPart(0.6, 0.6, 0.6, skinMaterial, 0.055);
+headGroup.add(head);
+
+const eyeGeometry = new RoundedBoxGeometry(0.075, 0.105, 0.025, 1, 0.01);
+const leftEye = new THREE.Mesh(eyeGeometry, faceMaterial);
+leftEye.position.set(-0.135, 0.085, 0.301);
+headGroup.add(leftEye);
+const rightEye = new THREE.Mesh(eyeGeometry, faceMaterial);
+rightEye.position.set(0.135, 0.085, 0.301);
+headGroup.add(rightEye);
+
+const smile = new THREE.Mesh(
+  new THREE.TorusGeometry(0.115, 0.021, 4, 14, Math.PI),
+  faceMaterial
 );
-playerBody.position.y = 1.1;
-playerBody.castShadow = true;
-player.add(playerBody);
+smile.rotation.z = Math.PI;
+smile.position.set(0, -0.075, 0.303);
+headGroup.add(smile);
+
+const leftArm = new THREE.Group();
+leftArm.position.set(-0.54, 1.64, 0);
+avatar.add(leftArm);
+const leftArmMesh = makeAvatarPart(0.22, 0.78, 0.3, skinMaterial, 0.06);
+leftArmMesh.position.y = -0.39;
+leftArm.add(leftArmMesh);
+
+const rightArm = new THREE.Group();
+rightArm.position.set(0.54, 1.64, 0);
+avatar.add(rightArm);
+const rightArmMesh = makeAvatarPart(0.22, 0.78, 0.3, skinMaterial, 0.06);
+rightArmMesh.position.y = -0.39;
+rightArm.add(rightArmMesh);
+
+const leftLeg = new THREE.Group();
+leftLeg.position.set(-0.2, 0.84, 0);
+avatar.add(leftLeg);
+const leftLegMesh = makeAvatarPart(0.3, 0.82, 0.36, pantsMaterial, 0.045);
+leftLegMesh.position.y = -0.41;
+leftLeg.add(leftLegMesh);
+
+const rightLeg = new THREE.Group();
+rightLeg.position.set(0.2, 0.84, 0);
+avatar.add(rightLeg);
+const rightLegMesh = makeAvatarPart(0.3, 0.82, 0.36, pantsMaterial, 0.045);
+rightLegMesh.position.y = -0.41;
+rightLeg.add(rightLegMesh);
 
 const lantern = new THREE.Mesh(
-  new THREE.SphereGeometry(0.17, 8, 8),
+  new THREE.SphereGeometry(0.15, 8, 8),
   new THREE.MeshStandardMaterial({ color: 0xffc66e, emissive: 0xff8a26, emissiveIntensity: 2.1, roughness: 0.4 })
 );
-lantern.position.set(0.48, 1.05, 0.34);
-player.add(lantern);
+lantern.position.set(0.02, -0.68, 0.2);
+lantern.castShadow = true;
+rightArm.add(lantern);
 
 const playerGlow = new THREE.PointLight(0xffc071, 0.8, 14, 2);
-playerGlow.position.set(0, 1.5, 0);
+playerGlow.position.set(0, 1.9, 0);
 player.add(playerGlow);
 
 const strikeArc = new THREE.Mesh(
@@ -169,8 +266,29 @@ strikeArc.position.set(0, 0.9, 0.85);
 strikeArc.visible = false;
 player.add(strikeArc);
 
-playerBody.scale.set(0.78, 0.78, 0.78);
-player.position.set(0, 0, 4);
+player.position.set(0, getGroundHeight(0, 4), 4);
+
+// A handful of low rocks give the character something small to auto-jump over.
+const lowObstacles = [];
+const rockGeometry = new THREE.DodecahedronGeometry(0.55, 0);
+const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x46504e, roughness: 0.95, metalness: 0.02 });
+for (let i = 0; i < 8; i += 1) {
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 10 + Math.random() * 20;
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius;
+  if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 1.6)) continue;
+  const scale = 0.8 + Math.random() * 0.55;
+  const groundY = getGroundHeight(x, z);
+  const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+  rock.position.set(x, groundY + 0.3025 * scale, z);
+  rock.scale.set(scale, scale * 0.55, scale);
+  rock.rotation.y = Math.random() * Math.PI;
+  rock.castShadow = true;
+  rock.receiveShadow = true;
+  world.add(rock);
+  lowObstacles.push({ x, z, radius: 0.52 * scale, top: groundY + 0.605 * scale });
+}
 
 const enemies = [];
 const enemyMat = new THREE.MeshStandardMaterial({ color: 0x2a343f, roughness: 0.9, metalness: 0.1 });
@@ -189,11 +307,9 @@ function makeEnemy() {
   eye.position.set(0, 1.45, 0.28);
   enemy.add(eye);
 
-  enemy.position.set(
-    (Math.random() - 0.5) * 75,
-    0,
-    (Math.random() - 0.5) * 75
-  );
+  const enemyX = (Math.random() - 0.5) * 75;
+  const enemyZ = (Math.random() - 0.5) * 75;
+  enemy.position.set(enemyX, getGroundHeight(enemyX, enemyZ), enemyZ);
   enemy.userData = {
     body,
     speed: 1.1 + Math.random() * 0.8,
@@ -254,13 +370,21 @@ const state = {
   nearFire: true,
   keys: new Set(),
   joystick: { x: 0, y: 0, active: false },
-  look: { active: false, x: 0, y: 0, lastX: 0, lastY: 0 },
+  look: { active: false, lastX: 0, lastY: 0 },
+  pinchDistance: 0,
   cameraYaw: 0,
   cameraPitch: 0,
+  cameraDistance: 5.7,
   nightTimer: 0,
   gameOver: false,
   pointerId: null,
   victory: false,
+  velocityY: 0,
+  grounded: true,
+  jumpHeld: false,
+  walkPhase: 0,
+  idleTime: 0,
+  moveSpeed: 0,
 };
 
 function clamp(value, min, max) {
@@ -340,31 +464,53 @@ function releaseJoystick() {
 joystickZone.addEventListener('pointerup', releaseJoystick);
 joystickZone.addEventListener('pointercancel', releaseJoystick);
 
+const lookPointers = new Map();
+
+function getPinchDistance() {
+  const points = [...lookPointers.values()];
+  if (points.length < 2) return 0;
+  return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+}
+
 lookZone.addEventListener('pointerdown', (event) => {
   if (!state.started) return;
+  event.preventDefault();
+  lookPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   state.look.active = true;
-  state.look.lastX = event.clientX;
-  state.look.lastY = event.clientY;
+  state.pinchDistance = getPinchDistance();
   lookZone.setPointerCapture(event.pointerId);
 });
 
 lookZone.addEventListener('pointermove', (event) => {
-  if (!state.look.active || !state.started) return;
-  const dx = event.clientX - state.look.lastX;
-  const dy = event.clientY - state.look.lastY;
-  state.look.lastX = event.clientX;
-  state.look.lastY = event.clientY;
-  state.cameraYaw -= dx * 0.0037;
-  state.cameraPitch = clamp(state.cameraPitch - dy * 0.0022, -0.7, 0.45);
+  if (!state.started) return;
+  const previous = lookPointers.get(event.pointerId);
+  if (!previous) return;
+  event.preventDefault();
+  lookPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (lookPointers.size === 1) {
+    const dx = event.clientX - previous.x;
+    const dy = event.clientY - previous.y;
+    state.cameraYaw -= dx * 0.0037;
+    state.cameraPitch = clamp(state.cameraPitch - dy * 0.0022, -0.7, 0.45);
+    return;
+  }
+
+  const distance = getPinchDistance();
+  if (state.pinchDistance > 0 && distance > 0) {
+    state.cameraDistance = clamp(state.cameraDistance * (state.pinchDistance / distance), 3, 8.5);
+  }
+  state.pinchDistance = distance;
 });
 
-lookZone.addEventListener('pointerup', () => {
-  state.look.active = false;
-});
+function releaseLookPointer(event) {
+  lookPointers.delete(event.pointerId);
+  state.pinchDistance = lookPointers.size >= 2 ? getPinchDistance() : 0;
+  if (lookPointers.size === 0) state.look.active = false;
+}
 
-lookZone.addEventListener('pointercancel', () => {
-  state.look.active = false;
-});
+lookZone.addEventListener('pointerup', releaseLookPointer);
+lookZone.addEventListener('pointercancel', releaseLookPointer);
 
 function startGame() {
   state.started = true;
@@ -380,11 +526,29 @@ function startGame() {
   state.keys.clear();
   state.cameraYaw = 0;
   state.cameraPitch = 0;
-  player.position.set(0, 0, -3.5);
+  state.cameraDistance = 5.7;
+  state.velocityY = 0;
+  state.grounded = true;
+  state.jumpHeld = false;
+  state.walkPhase = 0;
+  state.idleTime = 0;
+  state.moveSpeed = 0;
+  player.position.set(0, getGroundHeight(0, -3.5), -3.5);
+  player.rotation.y = 0;
+  leftArm.rotation.set(0, 0, 0);
+  rightArm.rotation.set(0, 0, 0);
+  leftLeg.rotation.set(0, 0, 0);
+  rightLeg.rotation.set(0, 0, 0);
+  avatar.position.y = 0.01;
+  lookPointers.clear();
+  state.look.active = false;
+  state.pinchDistance = 0;
   for (const enemy of enemies) {
     const angle = Math.random() * Math.PI * 2;
     const radius = 20 + Math.random() * 22;
-    enemy.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    enemy.position.set(x, getGroundHeight(x, z), z);
     enemy.visible = true;
     enemy.userData.attackCooldown = 0;
     enemy.userData.health = 2;
@@ -399,19 +563,45 @@ function startGame() {
 startBtn.addEventListener('click', startGame);
 
 const blockedKeys = new Set([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
+const jumpKeys = new Set(['shift', 'j']);
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   if (blockedKeys.has(key)) event.preventDefault();
   if (key === ' ' && !event.repeat) attack();
+  if (jumpKeys.has(key)) {
+    state.jumpHeld = true;
+    if (!event.repeat) tryJump();
+  }
   state.keys.add(key);
 });
-window.addEventListener('keyup', (event) => state.keys.delete(event.key.toLowerCase()));
-window.addEventListener('blur', () => state.keys.clear());
+window.addEventListener('keyup', (event) => {
+  const key = event.key.toLowerCase();
+  state.keys.delete(key);
+  if (jumpKeys.has(key)) state.jumpHeld = false;
+});
+window.addEventListener('blur', () => {
+  state.keys.clear();
+  state.jumpHeld = false;
+});
 
 attackBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   attack();
 });
+
+function setJumpHeld(held) {
+  state.jumpHeld = held;
+  if (held) tryJump();
+}
+
+jumpBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  jumpBtn.setPointerCapture(event.pointerId);
+  setJumpHeld(true);
+});
+jumpBtn.addEventListener('pointerup', () => setJumpHeld(false));
+jumpBtn.addEventListener('pointercancel', () => setJumpHeld(false));
+jumpBtn.addEventListener('lostpointercapture', () => setJumpHeld(false));
 
 overlay.addEventListener('pointerdown', (event) => {
   if (!state.started && event.target === overlay) startGame();
@@ -465,7 +655,7 @@ function spawnNightWave() {
     const angle = Math.random() * Math.PI * 2;
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    enemy.position.set(x, 0, z);
+    enemy.position.set(x, getGroundHeight(x, z), z);
     enemy.visible = true;
     enemy.userData.health = 2;
     enemy.userData.hitTimer = 0;
@@ -481,8 +671,75 @@ function spawnNightWave() {
 }
 
 function getCampfireInfluence() {
-  const toPlayer = player.position.clone().sub(campfire.position);
-  return toPlayer.lengthSq() < 10 * 10 ? 1 : 0;
+  const dx = player.position.x - campfire.position.x;
+  const dz = player.position.z - campfire.position.z;
+  return dx * dx + dz * dz < 10 * 10 ? 1 : 0;
+}
+
+const PLAYER_SPEED = 6;
+const PLAYER_RADIUS = 0.32;
+const JUMP_SPEED = 7.4;
+const GRAVITY = 17.5;
+
+function tryJump() {
+  if (!state.started || state.gameOver || !state.grounded) return;
+  state.velocityY = JUMP_SPEED;
+  state.grounded = false;
+}
+
+function updatePlayerVertical(delta) {
+  const groundY = getGroundHeight(player.position.x, player.position.z);
+  if (!state.started || state.gameOver) {
+    state.velocityY = 0;
+    state.grounded = true;
+    player.position.y = groundY;
+    return;
+  }
+
+  if (state.grounded) {
+    player.position.y = groundY;
+    if (state.jumpHeld) tryJump();
+    return;
+  }
+
+  state.velocityY -= GRAVITY * delta;
+  player.position.y += state.velocityY * delta;
+  if (player.position.y <= groundY) {
+    player.position.y = groundY;
+    state.velocityY = 0;
+    state.grounded = true;
+  }
+}
+
+function resolveTreeCollisions() {
+  for (const tree of treeData) {
+    const dx = player.position.x - tree.position.x;
+    const dz = player.position.z - tree.position.z;
+    const radius = tree.userData.scale * 0.3 + PLAYER_RADIUS;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq >= radius * radius || distanceSq < 0.0001) continue;
+    const distance = Math.sqrt(distanceSq);
+    const push = radius - distance;
+    player.position.x += (dx / distance) * push;
+    player.position.z += (dz / distance) * push;
+  }
+}
+
+function checkAutoJump(nextX, nextZ, moveDir) {
+  if (!state.grounded) return;
+  for (const obstacle of lowObstacles) {
+    const dx = nextX - obstacle.x;
+    const dz = nextZ - obstacle.z;
+    const reach = obstacle.radius + PLAYER_RADIUS + 0.12;
+    if (dx * dx + dz * dz > reach * reach) continue;
+    const towardX = obstacle.x - nextX;
+    const towardZ = obstacle.z - nextZ;
+    if (moveDir.x * towardX + moveDir.z * towardZ <= 0) continue;
+    if (obstacle.top - player.position.y <= 0.95) {
+      tryJump();
+      return;
+    }
+  }
 }
 
 function movePlayer(delta) {
@@ -492,23 +749,81 @@ function movePlayer(delta) {
   const keyY = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0);
   const moveX = clamp(state.joystick.x + keyX, -1, 1);
   const moveY = clamp(-state.joystick.y + keyY, -1, 1);
-  if (Math.abs(moveX) + Math.abs(moveY) < 0.02) return;
+  if (Math.abs(moveX) + Math.abs(moveY) < 0.02) {
+    state.moveSpeed = 0;
+    return;
+  }
 
   const forward = new THREE.Vector3(Math.sin(state.cameraYaw), 0, Math.cos(state.cameraYaw));
   const right = new THREE.Vector3(-Math.cos(state.cameraYaw), 0, Math.sin(state.cameraYaw));
   const moveDir = new THREE.Vector3();
   moveDir.addScaledVector(forward, moveY);
   moveDir.addScaledVector(right, moveX);
+  moveDir.normalize();
 
-  const lenSq = moveDir.lengthSq();
-  if (lenSq > 0) {
-    moveDir.normalize();
-    player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
-    player.position.addScaledVector(moveDir, delta * 5.8);
-  }
+  state.moveSpeed = PLAYER_SPEED;
+  player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
 
+  const nextX = player.position.x + moveDir.x * delta * PLAYER_SPEED;
+  const nextZ = player.position.z + moveDir.z * delta * PLAYER_SPEED;
+  checkAutoJump(nextX, nextZ, moveDir);
+
+  player.position.x = nextX;
+  player.position.z = nextZ;
+  resolveTreeCollisions();
   player.position.x = clamp(player.position.x, -30, 30);
   player.position.z = clamp(player.position.z, -30, 30);
+}
+
+function updateAvatar(delta) {
+  state.idleTime += delta;
+
+  let leftArmX = 0;
+  let rightArmX = 0;
+  let leftArmZ = 0;
+  let rightArmZ = 0;
+  let leftLegX = 0;
+  let rightLegX = 0;
+
+  if (!state.grounded) {
+    if (state.velocityY > 0.25) {
+      leftArmX = -2.55;
+      rightArmX = -2.55;
+      leftArmZ = -0.18;
+      rightArmZ = 0.18;
+    } else {
+      leftArmX = -0.2;
+      rightArmX = -0.2;
+      leftArmZ = -1.35;
+      rightArmZ = 1.35;
+    }
+    leftLegX = 0.12;
+    rightLegX = -0.12;
+  } else if (state.moveSpeed > 0.1) {
+    state.walkPhase += delta * (5 + state.moveSpeed);
+    const swing = Math.sin(state.walkPhase) * 0.72;
+    leftArmX = swing;
+    rightArmX = -swing;
+    leftLegX = -swing;
+    rightLegX = swing;
+  } else {
+    const sway = Math.sin(state.idleTime * 1.9) * 0.05;
+    leftArmX = sway;
+    rightArmX = -sway;
+  }
+
+  const damping = 1 - Math.exp(-14 * delta);
+  leftArm.rotation.x += (leftArmX - leftArm.rotation.x) * damping;
+  rightArm.rotation.x += (rightArmX - rightArm.rotation.x) * damping;
+  leftArm.rotation.z += (leftArmZ - leftArm.rotation.z) * damping;
+  rightArm.rotation.z += (rightArmZ - rightArm.rotation.z) * damping;
+  leftLeg.rotation.x += (leftLegX - leftLeg.rotation.x) * damping;
+  rightLeg.rotation.x += (rightLegX - rightLeg.rotation.x) * damping;
+
+  const bob = state.grounded && state.moveSpeed > 0.1
+    ? Math.abs(Math.sin(state.walkPhase)) * 0.02
+    : 0;
+  avatar.position.y += (0.01 + bob - avatar.position.y) * damping;
 }
 
 function updateEnemies(delta) {
@@ -521,7 +836,9 @@ function updateEnemies(delta) {
       if (data.respawnTimer <= 0) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 20 + Math.random() * 18;
-        enemy.position.set(player.position.x + Math.cos(angle) * radius, 0, player.position.z + Math.sin(angle) * radius);
+        const x = player.position.x + Math.cos(angle) * radius;
+        const z = player.position.z + Math.sin(angle) * radius;
+        enemy.position.set(x, getGroundHeight(x, z), z);
         data.health = 2;
         data.hitTimer = 0;
         enemy.visible = true;
@@ -542,6 +859,7 @@ function updateEnemies(delta) {
       enemy.position.addScaledVector(toPlayer, data.speed * delta);
     }
 
+    enemy.position.y = getGroundHeight(enemy.position.x, enemy.position.z);
     enemy.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
 
     if (dist < 1.3) {
@@ -608,17 +926,61 @@ function updateNight(delta) {
   }
 }
 
-function updateCamera() {
-  const targetPos = player.position.clone();
-  const offset = new THREE.Vector3(0, 2.7 + state.cameraPitch * 2.2, -5.7);
-  offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), state.cameraYaw);
-  const cameraPos = targetPos.clone().add(offset);
-  camera.position.lerp(cameraPos, 0.12);
+const cameraRaycaster = new THREE.Raycaster();
+const cameraTarget = new THREE.Vector3();
+const cameraDesired = new THREE.Vector3();
+const cameraRayDirection = new THREE.Vector3();
+const cameraCandidates = [];
 
-  const lookTarget = targetPos.clone().add(new THREE.Vector3(0, 1.2, 0));
-  const lookDir = new THREE.Vector3(Math.sin(state.cameraYaw), state.cameraPitch, Math.cos(state.cameraYaw));
-  lookTarget.add(lookDir.multiplyScalar(6));
-  camera.lookAt(lookTarget);
+function updateCamera() {
+  const yaw = state.cameraYaw;
+  const desiredDistance = state.cameraDistance;
+  const height = Math.max(0.45, 1.5 + state.cameraPitch * 2.1);
+
+  cameraTarget.copy(player.position);
+  cameraTarget.y += 1.35;
+
+  cameraDesired.set(
+    cameraTarget.x - Math.sin(yaw) * desiredDistance,
+    cameraTarget.y + height,
+    cameraTarget.z - Math.cos(yaw) * desiredDistance
+  );
+
+  cameraRayDirection.copy(cameraDesired).sub(cameraTarget);
+  const fullDistance = cameraRayDirection.length();
+  cameraRayDirection.normalize();
+
+  cameraCandidates.length = 0;
+  const broadRadius = desiredDistance + 4;
+  for (const tree of treeData) {
+    const dx = tree.position.x - cameraTarget.x;
+    const dz = tree.position.z - cameraTarget.z;
+    if (dx * dx + dz * dz < broadRadius * broadRadius) {
+      cameraCandidates.push(tree.userData.cameraMeshes[0], tree.userData.cameraMeshes[1]);
+    }
+  }
+
+  let distance = fullDistance;
+  if (cameraCandidates.length > 0) {
+    cameraRaycaster.set(cameraTarget, cameraRayDirection);
+    cameraRaycaster.far = fullDistance;
+    const hits = cameraRaycaster.intersectObjects(cameraCandidates, false);
+    if (hits.length > 0) distance = Math.max(1.4, hits[0].distance - 0.28);
+  }
+
+  cameraDesired.copy(cameraTarget).addScaledVector(cameraRayDirection, distance);
+  const groundClearance = getGroundHeight(cameraDesired.x, cameraDesired.z) + 0.35;
+  if (cameraDesired.y < groundClearance) cameraDesired.y = groundClearance;
+
+  const obstructed = distance < fullDistance - 0.01;
+  camera.position.lerp(cameraDesired, obstructed ? 0.55 : 0.16);
+  const smoothedGround = getGroundHeight(camera.position.x, camera.position.z) + 0.3;
+  if (camera.position.y < smoothedGround) camera.position.y = smoothedGround;
+
+  cameraTarget.x += Math.sin(yaw) * 6;
+  cameraTarget.y += state.cameraPitch * 6;
+  cameraTarget.z += Math.cos(yaw) * 6;
+  camera.lookAt(cameraTarget);
 }
 
 function updateOnGameOver() {
@@ -644,12 +1006,18 @@ function animate() {
 
   if (state.started && !state.gameOver) {
     movePlayer(delta);
+    updatePlayerVertical(delta);
     updateEnemies(delta);
     updateCampfire(delta);
     updateNight(delta);
     updateHud();
     updateOnGameOver();
+  } else {
+    state.moveSpeed = 0;
+    updatePlayerVertical(delta);
   }
+
+  updateAvatar(delta);
 
   if (state.victory && !state.started) {
     overlay.classList.remove('hidden');
