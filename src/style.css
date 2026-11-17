@@ -46,12 +46,8 @@ body {
   z-index: 13;
   pointer-events: none;
   opacity: 0;
-  background: radial-gradient(circle at 50% 58%, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.94) 74%);
-  transition: opacity 4s ease;
-}
-
-#darkness.out {
-  opacity: 1;
+  background: radial-gradient(circle at 50% 58%, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.62) 78%);
+  transition: opacity 2.2s ease;
 }
 
 #hud {
@@ -127,6 +123,30 @@ body {
   font-weight: 700;
   color: var(--gold);
   line-height: 1;
+  white-space: nowrap;
+}
+
+.night-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.phase-icon {
+  position: relative;
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 32%, #fff6c7, #ffc94e 55%, #e58a1f);
+  box-shadow: 0 0 9px rgba(255, 200, 80, 0.85);
+  transition: background 1.4s ease, box-shadow 1.4s ease;
+}
+
+.phase-icon.night {
+  background: #dfeaff;
+  box-shadow: inset -6px -3px 0 0 #0a1a25, 0 0 9px rgba(186, 214, 255, 0.7);
 }
 
 .fire-panel {
@@ -352,6 +372,89 @@ button:active {
   letter-spacing: 0.12em;
 }
 
+#plantBtn {
+  position: fixed;
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(292px, calc(env(safe-area-inset-bottom) + 292px));
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  min-height: 58px;
+  margin: 0;
+  padding: 9px 14px;
+  border-radius: 18px;
+  border-color: rgba(150, 239, 161, 0.62);
+  background: linear-gradient(180deg, rgba(72, 155, 86, 0.56), rgba(20, 58, 32, 0.85));
+  box-shadow: 0 0 24px rgba(80, 210, 120, 0.26), inset 0 1px rgba(255, 255, 255, 0.18);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  touch-action: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#plantBtn.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+#plantBtn span {
+  display: block;
+}
+
+#plantKey {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+#deathBanner {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 34px;
+  border: 1px solid rgba(255, 93, 93, 0.5);
+  border-radius: 18px;
+  background: rgba(30, 4, 6, 0.82);
+  box-shadow: 0 0 48px rgba(255, 45, 45, 0.3);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.94);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+#deathBanner.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+#deathBanner strong {
+  font-size: clamp(30px, 6vw, 52px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ff8b82;
+  text-shadow: 0 0 24px rgba(255, 70, 60, 0.55);
+}
+
+#deathBanner span {
+  color: rgba(255, 208, 204, 0.8);
+  font-size: clamp(11px, 1.8vw, 15px);
+  letter-spacing: 0.06em;
+}
+
 #attackBtn {
   position: fixed;
   right: max(22px, env(safe-area-inset-right));
@@ -417,18 +520,41 @@ button:active {
 
 .panel.right {
   position: relative;
-  overflow: hidden;
+  min-width: 104px;
 }
 
-.panel.right::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: var(--health-ratio, 100%);
-  height: 3px;
-  background: linear-gradient(90deg, #ff5d5d, #8aec9b);
-  transition: width 0.2s ease;
+.health-panel .value {
+  margin-top: 2px;
+  font-size: clamp(18px, 2.8vw, 26px);
+}
+
+.health-track {
+  height: 7px;
+  margin-top: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.health-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4fcf83, #8aec9b);
+  box-shadow: 0 0 10px rgba(116, 236, 155, 0.55);
+  transition: width 0.22s ease, background 0.35s ease;
+}
+
+.health-fill.low {
+  background: linear-gradient(90deg, #e08d2a, #ffba58);
+  box-shadow: 0 0 10px rgba(255, 186, 88, 0.55);
+}
+
+.health-fill.critical {
+  background: linear-gradient(90deg, #c92f2f, #ff5d5d);
+  box-shadow: 0 0 12px rgba(255, 93, 93, 0.65);
+  animation: fuelPulse 0.9s ease-in-out infinite alternate;
 }
 
 @media (max-width: 640px) {
@@ -448,15 +574,21 @@ button:active {
   }
 
   .stats-panel {
-    min-width: 72px;
+    min-width: 86px;
   }
 
   .stat-line {
-    gap: 10px;
+    gap: 8px;
   }
 
   .mini-value {
-    font-size: 16px;
+    font-size: 15px;
+  }
+
+  .phase-icon {
+    width: 12px;
+    height: 12px;
+    flex-basis: 12px;
   }
 
   #joystickZone {
@@ -467,6 +599,15 @@ button:active {
 
   #desktopHelp {
     display: none;
+  }
+
+  #plantBtn {
+    right: 18px;
+    bottom: calc(env(safe-area-inset-bottom) + 258px);
+    width: 92px;
+    min-height: 52px;
+    padding: 8px 8px;
+    font-size: 13px;
   }
 
   #interactBtn {
