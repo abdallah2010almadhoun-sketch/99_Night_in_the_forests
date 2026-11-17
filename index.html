@@ -26,6 +26,7 @@
           <span class="counter"><span class="dot wood"></span><span class="label">WOOD</span><b id="woodText">0</b></span>
           <span class="counter"><span class="dot sapling"></span><span class="label">SAP</span><b id="saplingText">0</b></span>
           <span class="counter"><span class="dot berry"></span><span class="label">BERRY</span><b id="berryText">0</b></span>
+          <span class="counter"><span class="dot iron"></span><span class="label">IRON</span><b id="ironText">0</b></span>
         </div>
       </div>
 
@@ -52,6 +53,36 @@
         </div>
         <div class="hunger-track"><div id="hungerFill" class="hunger-fill"></div></div>
       </div>
+    </div>
+
+    <div id="audioControls" aria-label="Audio controls">
+      <button id="audioToggle" class="audio-btn" aria-label="Mute sound" aria-pressed="false">
+        <svg class="audio-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9.5v5h3.6L13 18.5v-13L7.6 9.5H4Z" fill="currentColor" />
+          <path class="sound-wave wave-1" d="M16 8.6c1.2 1 1.9 2.4 1.9 3.9s-.7 2.9-1.9 3.9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          <path class="sound-wave wave-2" d="M18.6 6.2c2 1.6 3.2 3.9 3.2 6.3s-1.2 4.7-3.2 6.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          <path class="sound-slash" d="M16.2 8.4 21.4 15.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button id="settingsBtn" class="audio-btn" aria-label="Sound settings" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M10.6 3.6h2.8l.5 2.2a7 7 0 0 1 1.7 1l2.1-.8 1.4 2.4-1.6 1.6a7 7 0 0 1 0 2l1.6 1.6-1.4 2.4-2.1-.8a7 7 0 0 1-1.7 1l-.5 2.2h-2.8l-.5-2.2a7 7 0 0 1-1.7-1l-2.1.8-1.4-2.4 1.6-1.6a7 7 0 0 1 0-2L4.9 8.4l1.4-2.4 2.1.8a7 7 0 0 1 1.7-1l.5-2.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel hidden" role="dialog" aria-label="Sound settings">
+      <div class="settings-head">
+        <span>SOUND</span>
+        <button id="closeSettingsBtn" class="settings-close" aria-label="Close settings">×</button>
+      </div>
+      <label class="volume-row" for="volumeSlider">
+        <span>VOLUME</span>
+        <b id="volumeValue">70%</b>
+      </label>
+      <input id="volumeSlider" class="volume-slider" type="range" min="0" max="100" step="1" value="70" />
+      <div class="settings-note">Ambient forest, fire, footsteps and monsters.</div>
     </div>
 
     <div id="fireWarning" aria-live="polite">The fire is out!</div>
@@ -107,6 +138,33 @@
           <path d="M18 14v-3M30 14v-3" stroke="#d9a56b" stroke-width="1.8" stroke-linecap="round" />
         </svg>
       </button>
+      <button id="pickaxeSlot" class="hotbar-slot hidden" data-tool="pickaxe" aria-label="Pickaxe" aria-pressed="false">
+        <span class="hotbar-num">3</span>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M14 41 32 17" fill="none" stroke="#9a6338" stroke-width="4.4" stroke-linecap="round" />
+          <path d="M19.5 10.5c8.3-5 17.4-4.2 23.7 2.2-8.9-.8-15.6 1.1-20.5 5.7l-3.6 3.4-4.1-3.3 4.5-8Z" fill="#b8c4ca" stroke="#eef4f6" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M22 20.7c4.5-3.8 9.6-5.3 15.4-5.2" fill="none" stroke="#77858d" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button id="ironAxeSlot" class="hotbar-slot hidden" data-tool="ironAxe" aria-label="Iron Axe" aria-pressed="false">
+        <span class="hotbar-num">4</span>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M18.6 39.8 29.2 14.2" fill="none" stroke="#8a5530" stroke-width="4.4" stroke-linecap="round" />
+          <path d="M26.4 11.8c5-4.2 11-4.6 14.4-1.5 2.1 1.9 3.2 4.2 3.7 6.7-5.7-.2-10.6 1.6-14 5.1l-1.7 1.8-5.7-4.3 3.3-7.8Z" fill="#9fadb8" stroke="#f2f7fa" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M28.5 20.2c2.8-3.3 6.6-5.3 11-6.2" fill="none" stroke="#68767f" stroke-width="1.4" stroke-linecap="round" />
+          <circle cx="31.5" cy="20" r="1.2" fill="#ffcf76" />
+        </svg>
+      </button>
+      <button id="ironSwordSlot" class="hotbar-slot hidden" data-tool="ironSword" aria-label="Iron Sword" aria-pressed="false">
+        <span class="hotbar-num">5</span>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 5.5 29.4 12 26.6 31h-5.2L18.6 12Z" fill="#c9d8df" stroke="#f5fafc" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M24 7v22" stroke="#8496a1" stroke-width="1" />
+          <path d="M16.5 31h15" stroke="#d7b16a" stroke-width="3.4" stroke-linecap="round" />
+          <path d="M24 32v8.5" stroke="#6d4226" stroke-width="4.4" stroke-linecap="round" />
+          <path d="M20.5 43h7" stroke="#e0b260" stroke-width="3" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
 
     <div id="inventoryPanel" class="inventory-panel hidden" role="dialog" aria-label="Backpack inventory">
@@ -121,13 +179,43 @@
       </div>
     </div>
 
-    <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG LOOK · E INTERACT · SPACE ATTACK · F DROP · 1 / 2 TOOLS</div>
+    <div id="upgradePanel" class="upgrade-panel hidden" role="dialog" aria-label="Upgrade machine">
+      <div class="upgrade-head">
+        <div class="upgrade-heading">
+          <span class="upgrade-title">UPGRADE MACHINE</span>
+          <span id="machineStatus" class="machine-status">Idle</span>
+        </div>
+        <button id="closeUpgradeBtn" class="upgrade-close" aria-label="Close upgrade machine">×</button>
+      </div>
+      <div class="machine-fuel">
+        <div class="machine-fuel-head">
+          <span class="label">FUEL</span>
+          <span id="machineFuelText">0%</span>
+        </div>
+        <div class="machine-fuel-track">
+          <div id="machineFuelFill" class="machine-fuel-fill"></div>
+        </div>
+        <button id="machineFeedBtn" class="machine-feed">ADD WOOD <b>+25</b></button>
+      </div>
+      <div id="machineJob" class="machine-job hidden">
+        <div class="machine-job-head">
+          <span id="machineJobName">Working</span>
+          <span id="machineJobTime">10.0s</span>
+        </div>
+        <div class="machine-job-track">
+          <div id="machineJobFill" class="machine-job-fill"></div>
+        </div>
+      </div>
+      <div id="upgradeGrid" class="upgrade-grid"></div>
+    </div>
+
+    <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG LOOK · E INTERACT · SPACE ATTACK · F DROP · 1–5 TOOLS</div>
     <div id="lookZone" aria-label="Look around"></div>
 
     <div id="startOverlay" class="overlay visible">
       <div class="title">99 Nights</div>
       <div class="subtitle">Chop wood. Feed the campfire. Survive 99 nights.</div>
-      <div class="hint">Gather wood by day. At night, shadow creatures hunt you. Keep the fire strong to hold them back.<br />Equip the axe to chop, or the backpack to carry up to 20 items.</div>
+      <div class="hint">Gather wood by day. At night, shadow creatures hunt you. Keep the fire strong to hold them back.<br />Equip the axe to chop, the backpack to carry items, and use the machine by the fire to craft iron gear. Loose iron scraps lie near the machine.</div>
       <button id="startBtn">Begin</button>
     </div>
 

@@ -20,6 +20,7 @@ const dropBtn = document.getElementById('dropBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
 const berryText = document.getElementById('berryText');
+const ironText = document.getElementById('ironText');
 const fuelText = document.getElementById('fuelText');
 const fuelFill = document.getElementById('fuelFill');
 const hungerText = document.getElementById('hungerText');
@@ -32,12 +33,32 @@ const overlay = document.getElementById('startOverlay');
 const startBtn = document.getElementById('startBtn');
 const axeSlot = document.getElementById('axeSlot');
 const backpackSlot = document.getElementById('backpackSlot');
+const pickaxeSlot = document.getElementById('pickaxeSlot');
+const ironAxeSlot = document.getElementById('ironAxeSlot');
+const ironSwordSlot = document.getElementById('ironSwordSlot');
 const backpackBadge = document.getElementById('backpackBadge');
 const inventoryPanel = document.getElementById('inventoryPanel');
 const inventoryList = document.getElementById('inventoryList');
 const inventoryCapacity = document.getElementById('inventoryCapacity');
 const closeInventoryBtn = document.getElementById('closeInventoryBtn');
 const unequipBtn = document.getElementById('unequipBtn');
+const upgradePanel = document.getElementById('upgradePanel');
+const upgradeGrid = document.getElementById('upgradeGrid');
+const closeUpgradeBtn = document.getElementById('closeUpgradeBtn');
+const machineStatus = document.getElementById('machineStatus');
+const machineFuelText = document.getElementById('machineFuelText');
+const machineFuelFill = document.getElementById('machineFuelFill');
+const machineFeedBtn = document.getElementById('machineFeedBtn');
+const machineJob = document.getElementById('machineJob');
+const machineJobName = document.getElementById('machineJobName');
+const machineJobTime = document.getElementById('machineJobTime');
+const machineJobFill = document.getElementById('machineJobFill');
+const audioToggle = document.getElementById('audioToggle');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const volumeSlider = document.getElementById('volumeSlider');
+const volumeValue = document.getElementById('volumeValue');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -55,6 +76,11 @@ camera.rotation.order = 'YXZ';
 const clock = new THREE.Clock();
 const world = new THREE.Group();
 scene.add(world);
+
+const MACHINE_POSITION = new THREE.Vector3(3.4, 0, -1);
+const IRON_ROCK_HITS = 2;
+const solidProps = [];
+const TREE_HITS_BASE = 3;
 
 // Gentle rolling ground keeps the campfire clearing flat while giving the player
 // broad, easy-to-climb slopes farther out in the forest.
@@ -186,8 +212,8 @@ for (const tree of choppableTrees) {
   const data = tree.userData;
   data.choppable = true;
   data.baseChoppable = true;
-  data.hits = 3;
-  data.hitsMax = 3;
+  data.hits = TREE_HITS_BASE;
+  data.hitsMax = TREE_HITS_BASE;
   data.shake = 0;
   data.highlight = 0;
   data.trunk.material = data.trunk.material.clone();
@@ -383,6 +409,129 @@ axeBlade.castShadow = true;
 axe.add(axeBlade);
 axe.visible = false;
 
+const ironToolMaterial = new THREE.MeshStandardMaterial({
+  color: 0xaab8c1,
+  emissive: 0x1b252c,
+  emissiveIntensity: 0.36,
+  roughness: 0.3,
+  metalness: 0.68
+});
+const ironEdgeMaterial = new THREE.MeshStandardMaterial({
+  color: 0xdce8ee,
+  emissive: 0x35444d,
+  emissiveIntensity: 0.4,
+  roughness: 0.24,
+  metalness: 0.64
+});
+const toolHandleMaterial = new THREE.MeshStandardMaterial({ color: 0x714323, roughness: 0.84, metalness: 0.02 });
+const brassToolMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b260, roughness: 0.42, metalness: 0.5 });
+
+function addToolHandle(group, length, radius = 0.042) {
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.2, length, 6), toolHandleMaterial);
+  handle.position.y = length * 0.06;
+  handle.castShadow = true;
+  group.add(handle);
+  const grip = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 1.28, radius * 1.28, 0.2, 6),
+    new THREE.MeshStandardMaterial({ color: 0x362012, roughness: 0.95 })
+  );
+  grip.position.y = -length * 0.37;
+  grip.castShadow = true;
+  group.add(grip);
+}
+
+function createHeldPickaxe() {
+  const pickaxe = new THREE.Group();
+  addToolHandle(pickaxe, 0.92, 0.038);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.13, 0.13), ironToolMaterial);
+  head.position.set(0.02, 0.42, 0);
+  head.castShadow = true;
+  pickaxe.add(head);
+
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.31, 4), ironEdgeMaterial);
+  tip.position.set(0.42, 0.42, 0);
+  tip.rotation.z = -Math.PI / 2;
+  tip.castShadow = true;
+  pickaxe.add(tip);
+
+  const backTip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.23, 4), ironToolMaterial);
+  backTip.position.set(-0.35, 0.42, 0);
+  backTip.rotation.z = Math.PI / 2;
+  backTip.castShadow = true;
+  pickaxe.add(backTip);
+
+  return pickaxe;
+}
+
+function createHeldIronAxe() {
+  const ironAxe = new THREE.Group();
+  addToolHandle(ironAxe, 0.96, 0.045);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.11), ironToolMaterial);
+  head.position.set(0.11, 0.42, 0);
+  head.castShadow = true;
+  ironAxe.add(head);
+
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.34, 0.075), ironEdgeMaterial);
+  blade.position.set(0.29, 0.42, 0);
+  blade.rotation.z = -0.06;
+  blade.castShadow = true;
+  ironAxe.add(blade);
+
+  const rivet = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.028, 0.028, 0.13, 6),
+    brassToolMaterial
+  );
+  rivet.rotation.x = Math.PI / 2;
+  rivet.position.set(0.11, 0.42, 0.04);
+  ironAxe.add(rivet);
+
+  return ironAxe;
+}
+
+function createHeldIronSword() {
+  const sword = new THREE.Group();
+  addToolHandle(sword, 0.55, 0.035);
+
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.11), brassToolMaterial);
+  guard.position.y = 0.18;
+  guard.castShadow = true;
+  sword.add(guard);
+
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.9, 0.055), ironEdgeMaterial);
+  blade.position.y = 0.68;
+  blade.castShadow = true;
+  sword.add(blade);
+
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.099, 0.24, 4), ironEdgeMaterial);
+  tip.position.y = 1.23;
+  tip.castShadow = true;
+  sword.add(tip);
+
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), brassToolMaterial);
+  pommel.position.y = -0.12;
+  sword.add(pommel);
+
+  return sword;
+}
+
+const heldPickaxe = createHeldPickaxe();
+const heldIronAxe = createHeldIronAxe();
+const heldIronSword = createHeldIronSword();
+for (const [tool, group, bob] of [
+  ['pickaxe', heldPickaxe, 0.04],
+  ['ironAxe', heldIronAxe, 0.02],
+  ['ironSword', heldIronSword, 0.08]
+]) {
+  group.position.set(0.12, -0.62 + bob, 0.1);
+  group.rotation.set(0.12, 0.08, tool === 'ironSword' ? -0.1 : -0.38);
+  group.visible = false;
+  group.userData.baseY = group.position.y;
+  group.userData.tool = tool;
+  rightArm.add(group);
+}
+
 const backpackMat = new THREE.MeshStandardMaterial({ color: 0x7c4a2a, roughness: 0.78, metalness: 0.02 });
 const backpackTrimMat = new THREE.MeshStandardMaterial({ color: 0x4e2c18, roughness: 0.86 });
 const backpackBuckleMat = new THREE.MeshStandardMaterial({ color: 0xe0b260, roughness: 0.42, metalness: 0.5 });
@@ -433,6 +582,10 @@ rightArm.add(handBackpack);
 
 const AXE_BASE_Y = axe.position.y;
 const BACKPACK_BASE_Y = handBackpack.position.y;
+axe.userData.baseY = AXE_BASE_Y;
+axe.userData.tool = 'axe';
+handBackpack.userData.baseY = BACKPACK_BASE_Y;
+handBackpack.userData.tool = 'backpack';
 
 const playerGlow = new THREE.PointLight(0xffc071, 0.8, 14, 2);
 playerGlow.position.set(0, 1.9, 0);
@@ -568,6 +721,297 @@ for (let i = 0; i < 15; i += 1) {
   }
 }
 
+// ---------- Iron rocks ----------
+
+const ironRocks = [];
+const ironRockMaterial = new THREE.MeshStandardMaterial({ color: 0x59656b, roughness: 0.92, metalness: 0.08, flatShading: true });
+const ironRockLightMaterial = new THREE.MeshStandardMaterial({ color: 0x748188, roughness: 0.86, metalness: 0.12, flatShading: true });
+const ironStreakMaterial = new THREE.MeshStandardMaterial({
+  color: 0xc47837,
+  emissive: 0x6b2408,
+  emissiveIntensity: 0.65,
+  roughness: 0.55,
+  metalness: 0.32
+});
+const ironOreGeometry = new THREE.OctahedronGeometry(0.095, 0);
+
+function createIronRock(x, z, scale = 1) {
+  const group = new THREE.Group();
+  const rock = {
+    group,
+    x,
+    z,
+    scale,
+    hits: IRON_ROCK_HITS,
+    hitsMax: IRON_ROCK_HITS,
+    broken: false,
+    regrow: 0,
+    shake: 0,
+    sway: Math.random() * Math.PI * 2
+  };
+
+  const main = new THREE.Mesh(new THREE.DodecahedronGeometry(0.76, 0), ironRockMaterial);
+  main.position.y = 0.5;
+  main.scale.set(1.05, 0.82, 0.92);
+  main.rotation.y = Math.random() * Math.PI;
+  main.castShadow = true;
+  main.receiveShadow = true;
+  group.add(main);
+
+  const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.42, 0), ironRockLightMaterial);
+  chunk.position.set(0.48, 0.26, 0.2);
+  chunk.scale.set(1, 0.75, 0.9);
+  chunk.rotation.y = Math.random() * Math.PI;
+  chunk.castShadow = true;
+  chunk.receiveShadow = true;
+  group.add(chunk);
+
+  const chunk2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0), ironRockMaterial);
+  chunk2.position.set(-0.46, 0.2, -0.26);
+  chunk2.rotation.y = Math.random() * Math.PI;
+  chunk2.castShadow = true;
+  group.add(chunk2);
+
+  const oreSpots = [
+    [-0.33, 0.53, 0.63, 1.5, 1.1, 0.62, 0.2, 0.25, 0.45],
+    [0.18, 0.62, 0.66, 1.2, 0.9, 0.55, -0.15, 0.4, -0.35],
+    [0.63, 0.44, 0.25, 0.62, 1.15, 1.3, 0.3, -0.2, 0.25],
+    [-0.12, 0.35, 0.69, 1.35, 0.85, 0.55, 0.4, 0.1, 0.2],
+    [0.38, 0.5, -0.62, 1.2, 1, 0.7, -0.25, 0.3, -0.3]
+  ];
+  for (const [x, y, z, sx, sy, sz, rx, ry, rz] of oreSpots) {
+    const ore = new THREE.Mesh(ironOreGeometry, ironStreakMaterial);
+    ore.position.set(x, y, z);
+    ore.scale.set(sx, sy, sz);
+    ore.rotation.set(rx, ry, rz);
+    ore.castShadow = true;
+    group.add(ore);
+  }
+
+  group.position.set(x, getGroundHeight(x, z), z);
+  group.rotation.y = Math.random() * Math.PI * 2;
+  group.scale.setScalar(scale);
+  group.traverse((part) => { part.userData.rockRef = rock; });
+  world.add(group);
+  ironRocks.push(rock);
+  solidProps.push({ x, z, radius: 0.56 * scale, rock });
+  return rock;
+}
+
+function findRockSpot(x, z, scale) {
+  if (Math.hypot(x, z) < 10.5) return false;
+  if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 1.9 * scale)) return false;
+  if (berryBushes.some((bush) => Math.hypot(bush.x - x, bush.z - z) < 2 * scale)) return false;
+  if (ironRocks.some((rock) => Math.hypot(rock.x - x, rock.z - z) < 2.2 * scale)) return false;
+  return true;
+}
+
+const rockClusters = [
+  [17, -8], [-19, 12], [10, 24], [-25, -16], [26, 14], [-13, -24]
+];
+for (const [clusterX, clusterZ] of rockClusters) {
+  let placed = 0;
+  for (let attempt = 0; attempt < 18 && placed < 2; attempt += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * 2.7;
+    const x = clusterX + Math.cos(angle) * radius;
+    const z = clusterZ + Math.sin(angle) * radius;
+    const scale = 0.88 + Math.random() * 0.38;
+    if (!findRockSpot(x, z, scale)) continue;
+    createIronRock(x, z, scale);
+    placed += 1;
+  }
+}
+
+// ---------- Upgrade machine ----------
+
+const machine = new THREE.Group();
+const machineParts = {};
+const machineSmokePuffs = [];
+const machineGears = [];
+
+const machineBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x66757d, emissive: 0x172126, emissiveIntensity: 0.32, roughness: 0.46, metalness: 0.5 });
+const machineDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x3d4a51, emissive: 0x101a1e, emissiveIntensity: 0.3, roughness: 0.5, metalness: 0.48 });
+const machineWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x835427, emissive: 0x241204, emissiveIntensity: 0.28, roughness: 0.84, metalness: 0.03 });
+const machineWoodDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x5d381a, emissive: 0x1b0e04, emissiveIntensity: 0.25, roughness: 0.9 });
+const machinePanelMaterial = new THREE.MeshStandardMaterial({
+  color: 0x332013,
+  emissive: 0xff7a1d,
+  emissiveIntensity: 0.7,
+  roughness: 0.4,
+  metalness: 0.25
+});
+
+{
+  const body = new THREE.Mesh(new RoundedBoxGeometry(1.5, 1.4, 1.14, 2, 0.07), machineBodyMaterial);
+  body.position.y = 0.85;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  machine.add(body);
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.22, 1.3), machineDarkMaterial);
+  base.position.y = 0.12;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  machine.add(base);
+
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.1, 1.2), machineDarkMaterial);
+  rim.position.y = 1.56;
+  rim.castShadow = true;
+  machine.add(rim);
+
+  const hopper = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.34, 0.68, 4), machineWoodMaterial);
+  hopper.position.y = 1.88;
+  hopper.rotation.y = Math.PI / 4;
+  hopper.castShadow = true;
+  hopper.receiveShadow = true;
+  machine.add(hopper);
+
+  const hopperRim = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.1, 0.98), machineWoodDarkMaterial);
+  hopperRim.position.y = 2.22;
+  hopperRim.rotation.y = Math.PI / 4;
+  hopperRim.castShadow = true;
+  machine.add(hopperRim);
+
+  const hopperHole = new THREE.Mesh(
+    new THREE.BoxGeometry(0.66, 0.03, 0.66),
+    new THREE.MeshStandardMaterial({ color: 0x120d08, roughness: 1 })
+  );
+  hopperHole.position.y = 2.27;
+  hopperHole.rotation.y = Math.PI / 4;
+  machine.add(hopperHole);
+
+  const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.86, 6), machineDarkMaterial);
+  chimney.position.set(0.66, 2.4, -0.4);
+  chimney.castShadow = true;
+  machine.add(chimney);
+
+  const chimneyCap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.13, 0.12, 6), machineBodyMaterial);
+  chimneyCap.position.set(0.66, 2.86, -0.4);
+  chimneyCap.castShadow = true;
+  machine.add(chimneyCap);
+
+  const panelBack = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.66, 0.08), machineDarkMaterial);
+  panelBack.position.set(0, 0.9, 0.59);
+  machine.add(panelBack);
+
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.5, 0.045), machinePanelMaterial);
+  panel.position.set(0, 0.9, 0.64);
+  machine.add(panel);
+
+  for (const side of [-1, 1]) {
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.075, 6), machineBodyMaterial);
+    bolt.rotation.x = Math.PI / 2;
+    bolt.position.set(side * 0.28, 1.18, 0.665);
+    machine.add(bolt);
+    const boltLow = bolt.clone();
+    boltLow.position.y = 0.62;
+    machine.add(boltLow);
+  }
+
+  for (const [index, side] of [[0, -1], [1, 1]]) {
+    const gear = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 8), machineBodyMaterial);
+    gear.rotation.z = Math.PI / 2;
+    gear.position.set(side * 0.8, 0.72 + index * 0.32, 0.12);
+    gear.castShadow = true;
+    machine.add(gear);
+    machineGears.push(gear);
+  }
+
+  const glow = new THREE.PointLight(0xff8b2e, 0.95, 8.5, 2);
+  glow.position.set(0, 1.2, 0.95);
+  machine.add(glow);
+
+  for (let i = 0; i < 6; i += 1) {
+    const puff = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1 + i * 0.012, 5, 4),
+      new THREE.MeshBasicMaterial({ color: 0xc4cfcb, transparent: true, opacity: 0, depthWrite: false })
+    );
+    puff.position.set(0.66, 2.98 + i * 0.28, -0.4);
+    machine.add(puff);
+    machineSmokePuffs.push(puff);
+  }
+
+  machineParts.body = body;
+  machineParts.panel = panel;
+  machineParts.glow = glow;
+  machineParts.hopper = hopper;
+}
+
+machine.position.set(MACHINE_POSITION.x, getGroundHeight(MACHINE_POSITION.x, MACHINE_POSITION.z), MACHINE_POSITION.z);
+machine.rotation.y = -1.28;
+machine.traverse((part) => { part.userData.machineRef = true; });
+world.add(machine);
+solidProps.push({ x: MACHINE_POSITION.x, z: MACHINE_POSITION.z, radius: 0.96, type: 'machine' });
+
+const machineState = {
+  fuel: 0,
+  working: null,
+  progress: 0,
+  stalled: false,
+  statusTimer: 0,
+  smokeTimer: 0,
+  gearAngle: 0,
+  clankTimer: 0
+};
+
+// ---------- Iron walls ----------
+
+const placedWalls = [];
+const ironWallMaterial = new THREE.MeshStandardMaterial({ color: 0x66747c, roughness: 0.42, metalness: 0.62 });
+const ironWallEdgeMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa9b1, roughness: 0.34, metalness: 0.7 });
+
+function createIronWall(index) {
+  const angles = [-1.2, 0.85, 2.65, -2.5, 0.18, 3.6, -0.2, 1.9];
+  const angle = angles[index % angles.length];
+  const radius = 3.15;
+  const x = campfire.position.x + Math.sin(angle) * radius;
+  const z = campfire.position.z + Math.cos(angle) * radius;
+
+  const group = new THREE.Group();
+  for (let i = 0; i < 3; i += 1) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.02, 0.16), ironWallMaterial);
+    panel.position.set((i - 1) * 0.54, 0.54, 0);
+    panel.castShadow = true;
+    panel.receiveShadow = true;
+    group.add(panel);
+
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.1, 0.19), ironWallEdgeMaterial);
+    band.position.set((i - 1) * 0.54, 0.88, 0);
+    band.castShadow = true;
+    group.add(band);
+  }
+
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.2, 0.24), ironWallEdgeMaterial);
+    post.position.set(side * 0.88, 0.6, 0);
+    post.castShadow = true;
+    group.add(post);
+  }
+
+  group.position.set(x, getGroundHeight(x, z), z);
+  group.rotation.y = angle + Math.PI / 2;
+  world.add(group);
+  placedWalls.push({ group, x, z, rotation: group.rotation.y, width: 1.95, depth: 0.3 });
+}
+
+function resetPlacedWalls() {
+  for (const wall of placedWalls) world.remove(wall.group);
+  placedWalls.length = 0;
+}
+
+function resetIronRocks() {
+  for (const rock of ironRocks) {
+    rock.broken = false;
+    rock.hits = rock.hitsMax;
+    rock.regrow = 0;
+    rock.shake = 0;
+    rock.group.visible = true;
+    rock.group.scale.setScalar(rock.scale);
+    rock.group.rotation.z = 0;
+  }
+}
+
 const FIRE_FEED_RANGE = 3.8;
 const TREE_INTERACT_RANGE = 2.5;
 const FUEL_DRAIN_PER_SECOND = 0.8;
@@ -591,8 +1035,66 @@ const HUNGER_DRAIN_PER_SECOND = 0.42;
 const BERRY_HUNGER = 18;
 const EQUIP_TIME = 0.3;
 const STACK_LIMIT = 20;
-const ITEM_NAMES = { wood: 'Wood log', sapling: 'Sapling', berry: 'Berry' };
+const MACHINE_INTERACT_RANGE = 2.7;
+const MACHINE_CLOSE_ITEM_RANGE = 1.45;
+const MACHINE_FUEL_MAX = 100;
+const MACHINE_WOOD_FUEL = 25;
+const MACHINE_FUEL_DRAIN = 4;
+const IRON_REGROW_MIN = 28;
+const IRON_REGROW_MAX = 44;
+const ITEM_NAMES = {
+  wood: 'Wood log',
+  sapling: 'Sapling',
+  berry: 'Berry',
+  iron: 'Iron piece',
+  pickaxe: 'Pickaxe',
+  ironAxe: 'Iron Axe',
+  ironSword: 'Iron Sword',
+  ironWall: 'Iron Wall',
+  biggerCampfire: 'Bigger Campfire'
+};
 const FUEL_VALUES = { wood: LOG_FUEL_VALUE, sapling: 12, berry: 5 };
+const FIRE_FUEL_TYPES = new Set(['wood', 'sapling', 'berry']);
+const UPGRADE_ORDER = ['ironAxe', 'pickaxe', 'ironSword', 'ironWall', 'biggerCampfire'];
+const UPGRADES = {
+  ironAxe: {
+    name: 'Iron Axe',
+    cost: { wood: 6, iron: 3 },
+    time: 10,
+    desc: 'Chops faster and hits harder.'
+  },
+  pickaxe: {
+    name: 'Pickaxe',
+    cost: { wood: 4, iron: 1 },
+    time: 10,
+    desc: 'Mine iron rocks at the forest edge.'
+  },
+  ironSword: {
+    name: 'Iron Sword',
+    cost: { wood: 5, iron: 5 },
+    time: 10,
+    desc: 'Strong melee blade for monsters.'
+  },
+  ironWall: {
+    name: 'Iron Wall',
+    cost: { wood: 8, iron: 6 },
+    time: 10,
+    desc: 'Places a sturdy wall by the campfire.'
+  },
+  biggerCampfire: {
+    name: 'Bigger Campfire',
+    cost: { wood: 10, iron: 5 },
+    time: 10,
+    desc: 'Wider light and scare radius.'
+  }
+};
+const TOOL_STATS = {
+  axe: { cooldown: 0.58, damage: 1, treePower: 1, rockPower: 0, range: 3.3, reach: 2.5 },
+  pickaxe: { cooldown: 0.5, damage: 1, treePower: 0, rockPower: 1, range: 3, reach: 2.5 },
+  ironAxe: { cooldown: 0.4, damage: 2, treePower: 2, rockPower: 0, range: 3.5, reach: 2.8 },
+  ironSword: { cooldown: 0.42, damage: 3, treePower: 0, rockPower: 0, range: 3.6, reach: 2.8 }
+};
+const TOOL_ORDER = ['axe', 'backpack', 'pickaxe', 'ironAxe', 'ironSword'];
 let interactPrompt = 'INTERACT';
 let toastTimer = 0;
 let lastInventorySignature = '';
@@ -605,9 +1107,45 @@ function getCampfireDistance() {
   );
 }
 
+function getMachineDistance() {
+  return Math.hypot(
+    player.position.x - MACHINE_POSITION.x,
+    player.position.z - MACHINE_POSITION.z
+  );
+}
+
+function getFireScareRadius() {
+  return FIRE_SCARE_RADIUS + state.fireLevel * 2.4;
+}
+
+function getCampfireSafeRadius() {
+  return 7 + state.fireLevel * 1.5;
+}
+
+function isUpgradeType(type) {
+  return type === 'pickaxe' || type === 'ironAxe' || type === 'ironSword'
+    || type === 'ironWall' || type === 'biggerCampfire';
+}
+
+function isToolType(tool) {
+  return tool === 'axe' || tool === 'pickaxe' || tool === 'ironAxe' || tool === 'ironSword';
+}
+
+function canChopTool(tool) {
+  const stats = TOOL_STATS[tool];
+  return !!stats && stats.treePower > 0;
+}
+
+function canMineTool(tool) {
+  const stats = TOOL_STATS[tool];
+  return !!stats && stats.rockPower > 0;
+}
+
 function updateInteractionTarget() {
   state.fireInReach = getCampfireDistance() <= FIRE_FEED_RANGE;
+  state.machineInReach = state.started && getMachineDistance() <= MACHINE_INTERACT_RANGE;
   state.targetTree = null;
+  state.targetRock = null;
   if (!state.started || state.gameOver) return;
 
   let closest = TREE_INTERACT_RANGE * TREE_INTERACT_RANGE;
@@ -621,32 +1159,75 @@ function updateInteractionTarget() {
       state.targetTree = tree;
     }
   }
+
+  let rockClosest = TREE_INTERACT_RANGE * TREE_INTERACT_RANGE;
+  for (const rock of ironRocks) {
+    if (rock.broken) continue;
+    const dx = player.position.x - rock.x;
+    const dz = player.position.z - rock.z;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq < rockClosest) {
+      rockClosest = distanceSq;
+      state.targetRock = rock;
+    }
+  }
+}
+
+function getInteractAction() {
+  if (!state.started || state.gameOver || state.falling || state.paused) return null;
+
+  const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
+  const closeItem = findNearestGroundItem(MACHINE_CLOSE_ITEM_RANGE);
+  const fuelLow = state.fuel < 99.5;
+  const carriedFuel = carriedItems.some((item) => FIRE_FUEL_TYPES.has(item.type));
+
+  const itemAction = (item) => ({
+    type: 'pickup',
+    label: isUpgradeType(item.type) ? 'COLLECT' : 'PICK UP',
+    item
+  });
+
+  if (state.fireInReach && carriedFuel && fuelLow && !state.machineInReach) {
+    return { type: 'fireThrow', label: 'THROW IN FIRE' };
+  }
+  if (closeItem) {
+    return itemAction(closeItem);
+  }
+  if (state.machineInReach) {
+    return { type: 'machine', label: 'USE MACHINE' };
+  }
+  if (nearbyItem) {
+    return itemAction(nearbyItem);
+  }
+  if (carriedItems.some((item) => item.type === 'sapling')) {
+    return { type: 'plant', label: 'PLANT SAPLING' };
+  }
+  if (canMineTool(state.equippedTool) && state.targetRock) {
+    return { type: 'mine', label: 'MINE IRON', rock: state.targetRock };
+  }
+  if (canChopTool(state.equippedTool) && state.targetTree) {
+    return { type: 'chop', label: 'CHOP', tree: state.targetTree };
+  }
+  if (state.fireInReach && backpackFuelCount() > 0) {
+    return { type: fuelLow ? 'fireFeed' : 'fireFull', label: fuelLow ? 'FEED FIRE' : 'FIRE FULL' };
+  }
+  if (state.fireInReach && carriedFuel) {
+    return { type: 'fireFull', label: 'FIRE FULL' };
+  }
+  return null;
 }
 
 function updateInteractPrompt() {
-  let label = 'INTERACT';
-  if (state.started && !state.gameOver && !state.falling) {
-    const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
-    const fuelLow = state.fuel < 99.5;
-    if (state.fireInReach && carriedItems.length > 0 && fuelLow) {
-      label = 'THROW IN FIRE';
-    } else if (nearbyItem) {
-      label = 'PICK UP';
-    } else if (carriedItems.some((item) => item.type === 'sapling')) {
-      label = 'PLANT SAPLING';
-    } else if (state.fireInReach && backpackCount() > 0) {
-      label = fuelLow ? 'FEED FIRE' : 'FIRE FULL';
-    } else if (state.equippedTool === 'axe' && state.targetTree) {
-      label = 'CHOP';
-    } else if (state.fireInReach && carriedItems.length > 0) {
-      label = 'FIRE FULL';
-    }
-  }
+  const action = getInteractAction();
+  const label = action ? action.label : 'INTERACT';
 
   if (label !== interactPrompt) {
     interactPrompt = label;
     interactLabel.textContent = label;
-    interactBtn.classList.toggle('ready', label !== 'INTERACT' && label !== 'FIRE FULL');
+    const ready = !!action && action.type !== 'fireFull' && action.type !== 'machine';
+    const machineReady = !!action && action.type === 'machine';
+    interactBtn.classList.toggle('ready', ready);
+    interactBtn.classList.toggle('machine', machineReady);
   }
 }
 
@@ -654,6 +1235,62 @@ function showToast(message) {
   toastEl.textContent = message;
   toastEl.classList.add('visible');
   toastTimer = 1.5;
+}
+
+function createIronPieceMesh(scale = 1) {
+  const piece = new THREE.Group();
+  const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.17, 0), ironRockLightMaterial);
+  chunk.scale.set(1.15, 0.8, 0.9);
+  chunk.castShadow = true;
+  piece.add(chunk);
+
+  const chunk2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.11, 0), ironRockMaterial);
+  chunk2.position.set(0.12, 0.02, 0.09);
+  chunk2.castShadow = true;
+  piece.add(chunk2);
+
+  const ore = new THREE.Mesh(ironOreGeometry, ironStreakMaterial);
+  ore.scale.set(1.35, 0.92, 0.55);
+  ore.position.set(-0.035, 0.055, 0.12);
+  ore.rotation.set(0.3, 0.25, 0.4);
+  piece.add(ore);
+
+  piece.scale.setScalar(scale);
+  return piece;
+}
+
+function createIronWallItemMesh() {
+  const wall = new THREE.Group();
+  for (let i = 0; i < 3; i += 1) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.68, 0.09), ironWallMaterial);
+    panel.position.set((i - 1) * 0.35, 0.35, 0);
+    panel.castShadow = true;
+    wall.add(panel);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.07, 0.11), ironWallEdgeMaterial);
+    band.position.set((i - 1) * 0.35, 0.58, 0);
+    wall.add(band);
+  }
+  return wall;
+}
+
+function createBiggerCampfireItemMesh() {
+  const upgrade = new THREE.Group();
+  for (let i = 0; i < 4; i += 1) {
+    const log = new THREE.Mesh(logGeometry, logMaterial);
+    log.scale.setScalar(0.7);
+    log.rotation.z = Math.PI / 2;
+    log.rotation.y = (i / 4) * Math.PI;
+    log.position.y = 0.1;
+    log.castShadow = true;
+    upgrade.add(log);
+  }
+  const ember = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 6, 5),
+    new THREE.MeshBasicMaterial({ color: 0xff9a3c })
+  );
+  ember.position.y = 0.22;
+  upgrade.add(ember);
+  return upgrade;
 }
 
 function makeGroundItemMesh(type) {
@@ -666,9 +1303,32 @@ function makeGroundItemMesh(type) {
   } else if (type === 'sapling') {
     mesh = createSaplingMesh(0.72);
     mesh.rotation.y = Math.random() * Math.PI * 2;
-  } else {
+  } else if (type === 'berry') {
     mesh = createBerryMesh(1);
     mesh.rotation.y = Math.random() * Math.PI * 2;
+  } else if (type === 'iron') {
+    mesh = createIronPieceMesh(1.2);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+  } else if (type === 'pickaxe') {
+    mesh = createHeldPickaxe();
+    mesh.scale.setScalar(0.78);
+    mesh.rotation.set(0.08, Math.random() * Math.PI * 2, -0.06);
+  } else if (type === 'ironAxe') {
+    mesh = createHeldIronAxe();
+    mesh.scale.setScalar(0.8);
+    mesh.rotation.set(0.08, Math.random() * Math.PI * 2, -0.06);
+  } else if (type === 'ironSword') {
+    mesh = createHeldIronSword();
+    mesh.scale.setScalar(0.68);
+    mesh.rotation.set(0.05, Math.random() * Math.PI * 2, 0.04);
+  } else if (type === 'ironWall') {
+    mesh = createIronWallItemMesh();
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+  } else if (type === 'biggerCampfire') {
+    mesh = createBiggerCampfireItemMesh();
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+  } else {
+    mesh = createBerryMesh(1);
   }
   return mesh;
 }
@@ -676,7 +1336,16 @@ function makeGroundItemMesh(type) {
 function spawnGroundItem(type, x, z, options = {}) {
   const mesh = makeGroundItemMesh(type);
   const groundY = getGroundHeight(x, z);
-  const restY = type === 'wood' ? 0.17 : type === 'berry' ? 0.14 : 0.02;
+  const isHeldUpgrade = type === 'pickaxe' || type === 'ironAxe' || type === 'ironSword';
+  const restY = type === 'wood'
+    ? 0.17
+    : type === 'berry'
+      ? 0.14
+      : type === 'iron'
+        ? 0.13
+        : isHeldUpgrade
+          ? 0.5
+          : 0.02;
   const baseScale = type === 'sapling' ? 0.72 : 1;
   const startY = options.startY ?? (groundY + restY + 0.45);
 
@@ -782,11 +1451,38 @@ function regrowBerries() {
   }
 }
 
+const STARTER_IRON_SPOTS = [
+  { x: MACHINE_POSITION.x - 1.55, z: MACHINE_POSITION.z - 1.15 },
+  { x: MACHINE_POSITION.x - 1.25, z: MACHINE_POSITION.z + 1.35 },
+  { x: MACHINE_POSITION.x + 1.75, z: MACHINE_POSITION.z - 1.35 },
+  { x: MACHINE_POSITION.x + 1.95, z: MACHINE_POSITION.z + 0.9 }
+];
+
+function spawnStarterIron() {
+  for (const spot of STARTER_IRON_SPOTS) {
+    const x = spot.x;
+    const z = spot.z;
+    const alreadyThere = groundItems.some((item) => (
+      item.type === 'iron'
+      && !item.carried
+      && item.popping <= 0
+      && Math.hypot(item.x - x, item.z - z) < 0.7
+    ));
+    if (alreadyThere) continue;
+    spawnGroundItem('iron', x, z, {
+      startY: getGroundHeight(x, z) + 0.45,
+      velocityY: 1.4,
+      pickupDelay: 0.25
+    });
+  }
+}
+
 function resetGroundItems() {
   for (const item of groundItems) world.remove(item.mesh);
   groundItems.length = 0;
   carriedItems.length = 0;
   regrowBerries();
+  spawnStarterIron();
 }
 
 function findNearestGroundItem(range, filter = null) {
@@ -807,11 +1503,19 @@ function findNearestGroundItem(range, filter = null) {
 }
 
 function backpackCount() {
+  return state.backpack.wood + state.backpack.sapling + state.backpack.berry + state.backpack.iron;
+}
+
+function backpackFuelCount() {
   return state.backpack.wood + state.backpack.sapling + state.backpack.berry;
 }
 
 function ownedCount(type) {
   return state.backpack[type] + carriedItems.filter((item) => item.type === type).length;
+}
+
+function availableCount(type) {
+  return ownedCount(type);
 }
 
 function isBackpackEquipped() {
@@ -820,6 +1524,7 @@ function isBackpackEquipped() {
 
 function addItemToBackpack(item) {
   if (!item || item.popping > 0) return false;
+  if (!Object.prototype.hasOwnProperty.call(state.backpack, item.type)) return false;
   if (backpackCount() >= BACKPACK_CAPACITY) {
     showToast('Backpack is full');
     return false;
@@ -830,12 +1535,51 @@ function addItemToBackpack(item) {
   backpackSlot.classList.remove('pop');
   void backpackSlot.offsetWidth;
   backpackSlot.classList.add('pop');
+  playPickupSound();
   showToast(`+1 ${ITEM_NAMES[item.type]}`);
+  return true;
+}
+
+function applyBiggerCampfire() {
+  state.fireLevel += 1;
+  const scale = 1 + Math.min(state.fireLevel, 5) * 0.14;
+  campfire.scale.setScalar(scale);
+  fireGlow.distance = 15 + state.fireLevel * 4.5;
+  warmLight.distance = 20 + state.fireLevel * 5;
+  showToast('The campfire grows brighter');
+  playUpgradeChime();
+}
+
+function collectUpgradeItem(item) {
+  if (!item || item.popping > 0) return false;
+  const type = item.type;
+  popGroundItem(item);
+
+  if (type === 'ironWall') {
+    createIronWall(placedWalls.length);
+    showToast('Iron Wall placed by the campfire');
+  } else if (type === 'biggerCampfire') {
+    applyBiggerCampfire();
+  } else if (isToolType(type)) {
+    state.ownedTools[type] = true;
+    updateHud();
+    updateToolUi();
+    showToast(`Collected ${ITEM_NAMES[type]}`);
+    playUpgradeChime();
+    equipTool(type);
+    return true;
+  }
+
+  updateHud();
+  playPickupSound();
   return true;
 }
 
 function pickUpItem(item) {
   if (!item || item.carried || item.popping > 0) return false;
+  if (isUpgradeType(item.type)) {
+    return collectUpgradeItem(item);
+  }
   if (isBackpackEquipped()) {
     return addItemToBackpack(item);
   }
@@ -848,12 +1592,14 @@ function pickUpItem(item) {
   item.pickupDelay = 0;
   carriedItems.push(item);
   updateHud();
+  playPickupSound();
   showToast(`Picked up ${ITEM_NAMES[item.type]}`);
   return true;
 }
 
 function dropCarriedItems() {
-  if (!state.started || state.gameOver || state.falling || state.paused || state.dropCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused
+    || state.machineOpen || state.settingsOpen || state.dropCooldown > 0) return;
 
   if (carriedItems.length > 0) {
     const items = carriedItems.splice(0, carriedItems.length);
@@ -878,7 +1624,7 @@ function dropCarriedItems() {
     return;
   }
 
-  const type = ['wood', 'sapling', 'berry'].find((candidate) => state.backpack[candidate] > 0);
+  const type = ['wood', 'sapling', 'berry', 'iron'].find((candidate) => state.backpack[candidate] > 0);
   if (!type) {
     showToast('Nothing to drop');
     return;
@@ -894,8 +1640,8 @@ function dropCarriedItems() {
 }
 
 function throwCarriedIntoFire() {
-  if (carriedItems.length === 0) return;
-  const items = carriedItems.slice();
+  const items = carriedItems.filter((item) => FIRE_FUEL_TYPES.has(item.type));
+  if (items.length === 0) return;
   let fuel = 0;
   for (const item of items) {
     fuel += FUEL_VALUES[item.type] || 5;
@@ -938,7 +1684,7 @@ function fellTree(tree) {
   data.shake = 0;
 }
 
-function chopTree(tree) {
+function chopTree(tree, power = 1) {
   const data = tree.userData;
   data.shake = TREE_SHAKE_TIME;
   state.chopTimer = 0.3;
@@ -948,41 +1694,421 @@ function chopTree(tree) {
     tree.position.z - player.position.z
   );
 
-  data.hits -= 1;
+  data.hits -= power;
+  playTreeThud();
   if (data.hits <= 0) fellTree(tree);
 }
 
+function mineIronRock(rock, power = 1) {
+  if (!rock || rock.broken) return;
+  if (!canMineTool(state.equippedTool)) {
+    showToast('Equip the pickaxe to mine iron');
+    return;
+  }
+
+  player.rotation.y = Math.atan2(rock.x - player.position.x, rock.z - player.position.z);
+  state.chopTimer = 0.3;
+  state.interactCooldown = 0.34;
+  rock.hits -= power;
+  rock.shake = 0.3;
+
+  if (rock.hits > 0) {
+    playRockClink();
+    showToast('The rock cracks');
+    return;
+  }
+
+  rock.broken = true;
+  rock.regrow = IRON_REGROW_MIN + Math.random() * (IRON_REGROW_MAX - IRON_REGROW_MIN);
+  rock.group.visible = false;
+  playRockBreak();
+
+  const dropCount = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < dropCount; i += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 0.55 + Math.random() * 0.55;
+    const x = rock.x + Math.cos(angle) * distance;
+    const z = rock.z + Math.sin(angle) * distance;
+    spawnGroundItem('iron', x, z, {
+      startY: getGroundHeight(x, z) + 0.5,
+      velocityY: 2.2 + Math.random() * 0.5,
+      pickupDelay: 0.4
+    });
+  }
+  updateHud();
+  showToast(`Mined ${dropCount} iron`);
+}
+
+function updateIronRocks(delta) {
+  for (const rock of ironRocks) {
+    if (rock.broken) {
+      rock.regrow = Math.max(0, rock.regrow - delta);
+      if (rock.regrow <= 0) {
+        rock.broken = false;
+        rock.hits = rock.hitsMax;
+        rock.group.visible = true;
+        rock.group.scale.setScalar(rock.scale * 0.6);
+        showToast('An iron rock has regrown');
+      }
+      continue;
+    }
+
+    if (rock.shake > 0) {
+      rock.shake = Math.max(0, rock.shake - delta);
+      const strength = rock.shake / 0.3;
+      const t = performance.now() * 0.001;
+      rock.group.rotation.z = Math.sin(t * 48) * 0.04 * strength;
+    } else {
+      rock.group.rotation.z = 0;
+    }
+
+    const damageScale = 0.82 + (rock.hits / rock.hitsMax) * 0.18;
+    const targetScale = rock.scale * damageScale;
+    if (rock.group.scale.x < targetScale) {
+      rock.group.scale.setScalar(Math.min(targetScale, rock.group.scale.x + delta * 1.6));
+    } else if (rock.group.scale.x > targetScale) {
+      rock.group.scale.setScalar(Math.max(targetScale, rock.group.scale.x - delta * 1.6));
+    }
+  }
+}
+
+// ---------- Upgrade machine ----------
+
+function canAffordUpgrade(upgrade) {
+  return availableCount('wood') >= upgrade.cost.wood && availableCount('iron') >= upgrade.cost.iron;
+}
+
+function missingUpgradeText(upgrade) {
+  const missing = [];
+  const wood = availableCount('wood');
+  const iron = availableCount('iron');
+  if (wood < upgrade.cost.wood) {
+    missing.push(`${upgrade.cost.wood - wood} wood`);
+  }
+  if (iron < upgrade.cost.iron) {
+    missing.push(`${upgrade.cost.iron - iron} iron`);
+  }
+  return missing.join(' + ');
+}
+
+function spendResource(type, amount) {
+  let remaining = amount;
+  const fromBackpack = Math.min(state.backpack[type], remaining);
+  state.backpack[type] -= fromBackpack;
+  remaining -= fromBackpack;
+  while (remaining > 0) {
+    const carriedIndex = carriedItems.findIndex((item) => item.type === type);
+    if (carriedIndex < 0) break;
+    popGroundItem(carriedItems[carriedIndex]);
+    remaining -= 1;
+  }
+  return amount - remaining;
+}
+
+function buildUpgradeOptions() {
+  if (upgradeGrid.childElementCount > 0) return;
+  for (const key of UPGRADE_ORDER) {
+    const upgrade = UPGRADES[key];
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'upgrade-card';
+    card.dataset.upgrade = key;
+
+    const name = document.createElement('span');
+    name.className = 'upgrade-name';
+    name.textContent = upgrade.name;
+
+    const cost = document.createElement('span');
+    cost.className = 'upgrade-cost';
+    cost.dataset.cost = `${upgrade.cost.wood} wood · ${upgrade.cost.iron} iron`;
+
+    const desc = document.createElement('span');
+    desc.className = 'upgrade-desc';
+    desc.textContent = upgrade.desc;
+
+    card.append(name, cost, desc);
+    card.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      startUpgrade(key);
+    });
+    upgradeGrid.appendChild(card);
+  }
+}
+
+function updateMachinePanel() {
+  const job = machineState.working ? UPGRADES[machineState.working] : null;
+  const fuelPercent = Math.round(machineState.fuel);
+  machineFuelText.textContent = `${fuelPercent}%`;
+  machineFuelFill.style.width = `${fuelPercent}%`;
+
+  machineStatus.classList.remove('working', 'stalled', 'ready');
+  if (job) {
+    machineJob.classList.remove('hidden');
+    machineJobName.textContent = job.name;
+    const remaining = Math.max(0, job.time - machineState.progress);
+    machineJobTime.textContent = machineState.stalled ? 'OUT OF FUEL' : `${remaining.toFixed(1)}s`;
+    machineJobFill.style.width = `${clamp(machineState.progress / job.time, 0, 1) * 100}%`;
+    if (machineState.stalled) {
+      machineStatus.textContent = 'Out of fuel - add wood';
+      machineStatus.classList.add('stalled');
+    } else {
+      machineStatus.textContent = `${job.name} working`;
+      machineStatus.classList.add('working');
+    }
+  } else {
+    machineJob.classList.add('hidden');
+    machineJobFill.style.width = '0%';
+    if (machineState.statusTimer > 0) {
+      machineStatus.textContent = machineState.statusText || 'Idle';
+      if ((machineState.statusText || '').includes('ready')) machineStatus.classList.add('ready');
+    } else {
+      machineStatus.textContent = machineState.fuel > 0 ? 'Ready for a new upgrade' : 'Add wood to start';
+    }
+  }
+
+  for (const card of upgradeGrid.children) {
+    const key = card.dataset.upgrade;
+    const upgrade = UPGRADES[key];
+    if (!upgrade) continue;
+    const owned = isToolType(key) && state.ownedTools[key];
+    const affordable = canAffordUpgrade(upgrade);
+    card.classList.toggle('owned', owned);
+    card.classList.toggle('unaffordable', !owned && !affordable);
+    card.classList.toggle('working', machineState.working === key);
+    const cost = card.querySelector('.upgrade-cost');
+    if (owned) {
+      cost.textContent = 'OWNED';
+      cost.classList.remove('missing');
+    } else {
+      cost.textContent = affordable
+        ? cost.dataset.cost
+        : `${cost.dataset.cost} · need ${missingUpgradeText(upgrade)}`;
+      cost.classList.toggle('missing', !affordable);
+    }
+  }
+}
+
+function openMachinePanel() {
+  if (!state.started || state.gameOver || state.falling || state.paused) return;
+  state.machineOpen = true;
+  setInventoryOpen(false);
+  setSettingsOpen(false);
+  releaseJoystick();
+  lookPointers.clear();
+  state.look.active = false;
+  state.pinchDistance = 0;
+  buildUpgradeOptions();
+  updateMachinePanel();
+  upgradePanel.classList.remove('hidden');
+  updateToolUi();
+  playEquipClick();
+}
+
+function closeMachinePanel() {
+  state.machineOpen = false;
+  upgradePanel.classList.add('hidden');
+  updateToolUi();
+}
+
+function startUpgrade(key) {
+  if (!state.started || state.gameOver || state.falling) return;
+  const upgrade = UPGRADES[key];
+  if (!upgrade) return;
+  if (machineState.working) {
+    showToast('The machine is already working');
+    return;
+  }
+  if (isToolType(key) && state.ownedTools[key]) {
+    showToast(`You already own the ${upgrade.name}`);
+    return;
+  }
+  if (!canAffordUpgrade(upgrade)) {
+    showToast(`Missing ${missingUpgradeText(upgrade)}`);
+    return;
+  }
+  if (machineState.fuel <= 0) {
+    showToast('Add wood to fuel the machine');
+    return;
+  }
+
+  spendResource('wood', upgrade.cost.wood);
+  spendResource('iron', upgrade.cost.iron);
+  machineState.working = key;
+  machineState.progress = 0;
+  machineState.stalled = false;
+  machineState.statusTimer = 0;
+  machineState.clankTimer = 0.2;
+  updateHud();
+  updateMachinePanel();
+  startMachineSound();
+  playEquipClick();
+  showToast(`${upgrade.name} started`);
+}
+
+function addMachineFuel() {
+  if (!state.started || state.gameOver || state.falling) return;
+  let source = '';
+
+  if (state.backpack.wood > 0) {
+    state.backpack.wood -= 1;
+    source = 'backpack';
+  } else {
+    const carriedIndex = carriedItems.findIndex((item) => item.type === 'wood');
+    if (carriedIndex >= 0) {
+      popGroundItem(carriedItems[carriedIndex]);
+      source = 'hands';
+    } else {
+      const nearbyWood = findNearestGroundItem(4.5, (item) => item.type === 'wood');
+      if (nearbyWood) {
+        popGroundItem(nearbyWood);
+        source = 'ground';
+      }
+    }
+  }
+
+  if (!source) {
+    showToast('No wood to feed the machine');
+    return;
+  }
+
+  machineState.fuel = clamp(machineState.fuel + MACHINE_WOOD_FUEL, 0, MACHINE_FUEL_MAX);
+  if (machineState.working && machineState.stalled) {
+    machineState.stalled = false;
+    startMachineSound();
+  }
+  updateHud();
+  updateMachinePanel();
+  playPickupSound();
+  showToast(`Machine fuel +${MACHINE_WOOD_FUEL}%`);
+}
+
+function completeUpgrade() {
+  const key = machineState.working;
+  if (!key) return;
+  const upgrade = UPGRADES[key];
+  machineState.working = null;
+  machineState.progress = 0;
+  machineState.stalled = false;
+  machineState.statusText = `${upgrade.name} ready!`;
+  machineState.statusTimer = 6;
+  stopMachineSound();
+  playUpgradeDing();
+
+  const forwardX = Math.sin(machine.rotation.y);
+  const forwardZ = Math.cos(machine.rotation.y);
+  const x = MACHINE_POSITION.x + forwardX * 1.35;
+  const z = MACHINE_POSITION.z + forwardZ * 1.35;
+  spawnGroundItem(key, x, z, {
+    startY: getGroundHeight(x, z) + 1.15,
+    velocityY: 2.4,
+    pickupDelay: 0.65
+  });
+  showToast(`${upgrade.name} is ready to collect`);
+  updateHud();
+  updateMachinePanel();
+}
+
+function updateMachine(delta) {
+  const job = machineState.working ? UPGRADES[machineState.working] : null;
+  const burning = !!job && machineState.fuel > 0 && !machineState.stalled;
+
+  if (job && !machineState.stalled) {
+    if (machineState.fuel > 0) {
+      machineState.fuel = Math.max(0, machineState.fuel - delta * MACHINE_FUEL_DRAIN);
+      machineState.progress += delta;
+      machineState.clankTimer -= delta;
+      if (machineState.clankTimer <= 0) {
+        playMachineClank();
+        machineState.clankTimer = 0.42 + Math.random() * 0.38;
+      }
+
+      if (machineState.fuel <= 0 && machineState.progress < job.time) {
+        machineState.stalled = true;
+        machineState.statusText = 'Out of fuel';
+        machineState.statusTimer = 3;
+        stopMachineSound();
+        showToast('Machine is out of fuel - add wood');
+      } else if (machineState.progress >= job.time) {
+        completeUpgrade();
+      }
+    }
+  }
+
+  if (machineState.statusTimer > 0) {
+    machineState.statusTimer = Math.max(0, machineState.statusTimer - delta);
+  }
+
+  const t = performance.now() * 0.001;
+  machinePanelMaterial.emissiveIntensity = burning
+    ? 1.15 + Math.sin(t * 11) * 0.25
+    : 0.62 + Math.sin(t * 2.2) * 0.1;
+  machineParts.glow.intensity = burning
+    ? 1.8 + Math.sin(t * 13) * 0.35
+    : 0.8 + Math.sin(t * 2.4) * 0.1;
+
+  if (burning) {
+    machineState.gearAngle += delta * 2.6;
+    machineGears[0].rotation.x = machineState.gearAngle;
+    machineGears[1].rotation.x = -machineState.gearAngle * 0.7;
+  }
+
+  for (let i = 0; i < machineSmokePuffs.length; i += 1) {
+    const puff = machineSmokePuffs[i];
+    if (burning) {
+      const phase = (t * 0.32 + i / machineSmokePuffs.length) % 1;
+      puff.position.set(
+        0.66 + Math.sin(t * 1.1 + i) * 0.1,
+        2.9 + phase * 1.55,
+        -0.4 + Math.cos(t * 1.3 + i) * 0.1
+      );
+      puff.scale.setScalar(0.85 + phase * 1.65);
+      puff.material.opacity = 0.24 * (1 - phase);
+    } else {
+      puff.material.opacity = Math.max(0, puff.material.opacity - delta * 0.25);
+    }
+  }
+
+  if (state.machineOpen) updateMachinePanel();
+}
+
+// ---------- Interaction ----------
+
 function interact() {
-  if (!state.started || state.gameOver || state.falling || state.paused || state.interactCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused
+    || state.machineOpen || state.settingsOpen || state.interactCooldown > 0) return;
 
-  if (state.fireInReach && carriedItems.length > 0 && state.fuel < 99.5) {
-    throwCarriedIntoFire();
-    return;
-  }
+  const action = getInteractAction();
+  if (!action) return;
 
-  const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
-  if (nearbyItem) {
-    if (pickUpItem(nearbyItem)) state.interactCooldown = 0.32;
-    return;
-  }
-
-  if (carriedItems.some((item) => item.type === 'sapling')) {
-    plantSapling();
-    return;
-  }
-
-  if (state.fireInReach && backpackCount() > 0 && state.fuel < 99.5) {
-    feedFireFromBackpack();
-    return;
-  }
-
-  if (state.equippedTool === 'axe' && state.targetTree) {
-    chopTree(state.targetTree);
-    return;
-  }
-
-  if (state.fireInReach && state.fuel >= 99.5 && (carriedItems.length > 0 || backpackCount() > 0)) {
-    showToast('The fire is already full');
+  switch (action.type) {
+    case 'fireThrow':
+      throwCarriedIntoFire();
+      break;
+    case 'pickup':
+      if (pickUpItem(action.item)) state.interactCooldown = 0.32;
+      break;
+    case 'machine':
+      openMachinePanel();
+      break;
+    case 'plant':
+      plantSapling();
+      break;
+    case 'mine':
+      mineIronRock(action.rock);
+      state.interactCooldown = 0.34;
+      break;
+    case 'chop':
+      chopTree(action.tree, TOOL_STATS[state.equippedTool]?.treePower ?? 1);
+      break;
+    case 'fireFeed':
+      feedFireFromBackpack();
+      break;
+    case 'fireFull':
+      showToast('The fire is already full');
+      break;
+    default:
+      break;
   }
 }
 
@@ -1047,8 +2173,8 @@ function markChoppable(tree) {
   data.falling = false;
   data.fallProgress = 0;
   data.lootDropped = false;
-  data.hits = 3;
-  data.hitsMax = 3;
+  data.hits = TREE_HITS_BASE;
+  data.hitsMax = TREE_HITS_BASE;
   data.shake = 0;
   data.highlight = 0;
   tree.visible = true;
@@ -1059,7 +2185,8 @@ function markChoppable(tree) {
 }
 
 function plantSapling() {
-  if (!state.started || state.gameOver || state.falling || state.paused || state.plantCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.paused
+    || state.machineOpen || state.settingsOpen || state.plantCooldown > 0) return;
   const carriedIndex = carriedItems.findIndex((item) => item.type === 'sapling');
   if (carriedIndex < 0) {
     showToast('Carry a sapling to plant it');
@@ -1124,6 +2251,7 @@ function updateTrees(delta) {
       tree.quaternion.setFromAxisAngle(data.fallAxis, angle);
       if (data.fallProgress >= 1 && !data.lootDropped) {
         data.lootDropped = true;
+        playTreeCrash();
         for (let i = 0; i < 3; i += 1) dropLog(tree, i);
         dropSapling(tree);
       }
@@ -1413,10 +2541,15 @@ const state = {
   walkPhase: 0,
   idleTime: 0,
   moveSpeed: 0,
-  backpack: { wood: 0, sapling: 0, berry: 0 },
+  backpack: { wood: 0, sapling: 0, berry: 0, iron: 0 },
+  ownedTools: { axe: true, pickaxe: false, ironAxe: false, ironSword: false },
   equippedTool: null,
   equipTimer: 0,
   inventoryOpen: false,
+  machineOpen: false,
+  settingsOpen: false,
+  machineInReach: false,
+  fireLevel: 0,
   dropCooldown: 0,
   starveTimer: 0,
   portrait: false,
@@ -1429,6 +2562,7 @@ const state = {
   chopTimer: 0,
   plantCooldown: 0,
   targetTree: null,
+  targetRock: null,
   falling: 0,
   invuln: 0,
   hitEffectTimer: 0,
@@ -1448,6 +2582,7 @@ function updateHud() {
   woodText.textContent = String(ownedCount('wood'));
   saplingText.textContent = String(ownedCount('sapling'));
   berryText.textContent = String(ownedCount('berry'));
+  ironText.textContent = String(ownedCount('iron'));
   healthText.textContent = String(Math.max(0, Math.ceil(state.health)));
   hungerText.textContent = String(Math.max(0, Math.ceil(state.hunger)));
 
@@ -1491,16 +2626,29 @@ function updateHud() {
 }
 
 function updateToolUi() {
-  const axeEquipped = state.equippedTool === 'axe';
-  const backpackEquipped = state.equippedTool === 'backpack';
-  axeSlot.classList.toggle('equipped', axeEquipped);
-  backpackSlot.classList.toggle('equipped', backpackEquipped);
-  axeSlot.setAttribute('aria-pressed', String(axeEquipped));
-  backpackSlot.setAttribute('aria-pressed', String(backpackEquipped));
+  const slots = [
+    ['axe', axeSlot],
+    ['backpack', backpackSlot],
+    ['pickaxe', pickaxeSlot],
+    ['ironAxe', ironAxeSlot],
+    ['ironSword', ironSwordSlot]
+  ];
 
-  const showAttack = axeEquipped && state.started && !state.gameOver && !state.falling;
+  for (const [tool, slot] of slots) {
+    const owned = tool === 'backpack' || !!state.ownedTools[tool];
+    const equipped = state.equippedTool === tool;
+    slot.classList.toggle('hidden', !owned);
+    slot.classList.toggle('equipped', equipped);
+    slot.setAttribute('aria-pressed', String(equipped));
+  }
+
+  const stats = TOOL_STATS[state.equippedTool];
+  const showAttack = !!stats && state.started && !state.gameOver && !state.falling
+    && !state.machineOpen && !state.settingsOpen && !state.inventoryOpen;
   attackBtn.classList.toggle('visible', showAttack);
-  if (state.targetTree && axeEquipped) {
+  if (canMineTool(state.equippedTool) && state.targetRock) {
+    attackLabel.textContent = 'MINE';
+  } else if (canChopTool(state.equippedTool) && state.targetTree) {
     attackLabel.textContent = 'CHOP';
   } else {
     attackLabel.textContent = 'ATTACK';
@@ -1509,7 +2657,7 @@ function updateToolUi() {
 
 function renderInventory() {
   if (!state.inventoryOpen) return;
-  const signature = `${state.backpack.wood}|${state.backpack.sapling}|${state.backpack.berry}`;
+  const signature = `${state.backpack.wood}|${state.backpack.sapling}|${state.backpack.berry}|${state.backpack.iron}`;
   if (signature === lastInventorySignature) return;
   lastInventorySignature = signature;
 
@@ -1517,7 +2665,8 @@ function renderInventory() {
   const entries = [
     ['wood', 'Wood log'],
     ['sapling', 'Sapling'],
-    ['berry', 'Berry']
+    ['berry', 'Berry'],
+    ['iron', 'Iron piece']
   ];
   let hasItems = false;
 
@@ -1578,11 +2727,14 @@ function setInventoryOpen(open) {
   state.inventoryOpen = open;
   inventoryPanel.classList.toggle('hidden', !open);
   if (open) {
+    closeMachinePanel();
+    setSettingsOpen(false);
     toastTimer = 0;
     toastEl.classList.remove('visible');
     lastInventorySignature = '';
     renderInventory();
   }
+  updateToolUi();
 }
 
 function takeOutItem(type) {
@@ -1608,9 +2760,14 @@ function eatBackpackBerry() {
 
 function equipTool(tool) {
   if (!state.started || state.gameOver || state.falling || state.paused) return;
+  if (tool !== 'backpack' && !state.ownedTools[tool]) {
+    showToast(`Craft the ${ITEM_NAMES[tool] || 'tool'} first`);
+    return;
+  }
 
   if (tool === 'backpack' && state.equippedTool === 'backpack') {
     setInventoryOpen(!state.inventoryOpen);
+    updateToolUi();
     return;
   }
 
@@ -1620,8 +2777,11 @@ function equipTool(tool) {
     state.equippedTool = tool;
   }
 
+  closeMachinePanel();
+  setSettingsOpen(false);
   if (state.equippedTool !== 'backpack') setInventoryOpen(false);
   state.equipTimer = state.equippedTool ? EQUIP_TIME : 0;
+  playEquipClick();
   updateHud();
   updateToolModels();
 }
@@ -1630,32 +2790,47 @@ function unequipTool() {
   state.equippedTool = null;
   state.equipTimer = 0;
   setInventoryOpen(false);
+  closeMachinePanel();
+  playEquipClick();
   updateHud();
   updateToolModels();
 }
 
+function getHeldToolModel() {
+  switch (state.equippedTool) {
+    case 'axe': return axe;
+    case 'backpack': return handBackpack;
+    case 'pickaxe': return heldPickaxe;
+    case 'ironAxe': return heldIronAxe;
+    case 'ironSword': return heldIronSword;
+    default: return null;
+  }
+}
+
 function updateToolModels() {
-  const axeEquipped = state.equippedTool === 'axe';
-  const backpackEquipped = state.equippedTool === 'backpack';
-  axe.visible = axeEquipped;
-  handBackpack.visible = backpackEquipped;
+  axe.visible = state.equippedTool === 'axe';
+  handBackpack.visible = state.equippedTool === 'backpack';
+  heldPickaxe.visible = state.equippedTool === 'pickaxe';
+  heldIronAxe.visible = state.equippedTool === 'ironAxe';
+  heldIronSword.visible = state.equippedTool === 'ironSword';
   lantern.visible = !state.equippedTool;
 }
 
 function updateEquippedTool(delta) {
   state.equipTimer = Math.max(0, state.equipTimer - delta);
-  const tool = state.equippedTool === 'axe' ? axe : state.equippedTool === 'backpack' ? handBackpack : null;
+  const tool = getHeldToolModel();
   if (!tool) return;
 
+  const baseY = tool.userData.baseY ?? tool.position.y;
+  const baseScale = tool === handBackpack ? 0.92 : 1;
   if (state.equipTimer > 0) {
     const progress = 1 - state.equipTimer / EQUIP_TIME;
     const eased = 1 - (1 - progress) * (1 - progress);
-    const baseY = tool === axe ? AXE_BASE_Y : BACKPACK_BASE_Y;
-    tool.scale.setScalar(0.55 + eased * 0.45);
+    tool.scale.setScalar((0.55 + eased * 0.45) * baseScale);
     tool.position.y = baseY - (1 - eased) * 0.26;
   } else {
-    tool.scale.setScalar(tool === axe ? 1 : 0.92);
-    tool.position.y = tool === axe ? AXE_BASE_Y : BACKPACK_BASE_Y;
+    tool.scale.setScalar(baseScale);
+    tool.position.y = baseY;
   }
 }
 
@@ -1720,7 +2895,7 @@ function getPinchDistance() {
 }
 
 lookZone.addEventListener('pointerdown', (event) => {
-  if (!state.started || state.inventoryOpen) return;
+  if (!state.started || state.inventoryOpen || state.machineOpen || state.settingsOpen) return;
   event.preventDefault();
   lookPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   state.look.active = true;
@@ -1729,7 +2904,7 @@ lookZone.addEventListener('pointerdown', (event) => {
 });
 
 lookZone.addEventListener('pointermove', (event) => {
-  if (!state.started || state.inventoryOpen) return;
+  if (!state.started || state.inventoryOpen || state.machineOpen || state.settingsOpen) return;
   const previous = lookPointers.get(event.pointerId);
   if (!previous) return;
   event.preventDefault();
@@ -1814,9 +2989,19 @@ function startGame() {
   state.backpack.wood = 0;
   state.backpack.sapling = 0;
   state.backpack.berry = 0;
+  state.backpack.iron = 0;
+  state.ownedTools.axe = true;
+  state.ownedTools.pickaxe = false;
+  state.ownedTools.ironAxe = false;
+  state.ownedTools.ironSword = false;
   state.equippedTool = null;
   state.equipTimer = 0;
   state.inventoryOpen = false;
+  state.machineOpen = false;
+  state.settingsOpen = false;
+  state.machineInReach = false;
+  state.fireLevel = 0;
+  state.targetRock = null;
   state.dropCooldown = 0;
   state.starveTimer = 0;
   state.fuel = 100;
@@ -1832,6 +3017,20 @@ function startGame() {
   toastTimer = 0;
   toastEl.classList.remove('visible');
   setInventoryOpen(false);
+  closeMachinePanel();
+  setSettingsOpen(false);
+  campfire.scale.setScalar(1);
+  fireGlow.distance = 15;
+  warmLight.distance = 20;
+  machineState.fuel = 0;
+  machineState.working = null;
+  machineState.progress = 0;
+  machineState.stalled = false;
+  machineState.statusTimer = 0;
+  machineState.statusText = '';
+  stopMachineSound();
+  resetPlacedWalls();
+  resetIronRocks();
   player.position.set(0, getGroundHeight(0, -3.5), -3.5);
   player.rotation.y = 0;
   leftArm.rotation.set(0, 0, 0);
@@ -1875,7 +3074,7 @@ function startGame() {
   hitEffect.visible = false;
   updateToolModels();
   updateHud();
-  showToast('Tap a hotbar slot to equip a tool');
+  showToast('Tap a tool · loose iron by the machine');
 }
 
 startBtn.addEventListener('click', startGame);
@@ -1891,6 +3090,14 @@ window.addEventListener('keydown', (event) => {
   if (key === 'f' && !event.repeat) dropCarriedItems();
   if (key === '1' && !event.repeat) equipTool('axe');
   if (key === '2' && !event.repeat) equipTool('backpack');
+  if (key === '3' && !event.repeat) equipTool('pickaxe');
+  if (key === '4' && !event.repeat) equipTool('ironAxe');
+  if (key === '5' && !event.repeat) equipTool('ironSword');
+  if (key === 'escape' && !event.repeat) {
+    closeMachinePanel();
+    setSettingsOpen(false);
+    setInventoryOpen(false);
+  }
   if (jumpKeys.has(key)) {
     state.jumpHeld = true;
     if (!event.repeat) tryJump();
@@ -1932,6 +3139,32 @@ backpackSlot.addEventListener('pointerdown', (event) => {
   equipTool('backpack');
 });
 
+pickaxeSlot.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  equipTool('pickaxe');
+});
+
+ironAxeSlot.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  equipTool('ironAxe');
+});
+
+ironSwordSlot.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  equipTool('ironSword');
+});
+
+closeUpgradeBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  closeMachinePanel();
+});
+
+machineFeedBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  addMachineFuel();
+});
+
 closeInventoryBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   setInventoryOpen(false);
@@ -1946,7 +3179,7 @@ unequipBtn.addEventListener('pointerdown', (event) => {
 let worldTap = null;
 window.addEventListener('pointerdown', (event) => {
   if (event.pointerType === 'mouse' && event.button !== 0) return;
-  if (event.target.closest('button, #inventoryPanel, #startOverlay, #rotateOverlay')) return;
+  if (event.target.closest('button, #inventoryPanel, #upgradePanel, #settingsPanel, #startOverlay, #rotateOverlay')) return;
   if (event.target.closest('#joystickZone, #hotbar, #actionCluster')) return;
   worldTap = {
     id: event.pointerId,
@@ -1960,7 +3193,8 @@ window.addEventListener('pointerup', (event) => {
   if (!worldTap || worldTap.id !== event.pointerId) return;
   const tap = worldTap;
   worldTap = null;
-  if (!state.started || state.gameOver || state.falling || state.inventoryOpen || state.portrait) return;
+  if (!state.started || state.gameOver || state.falling || state.inventoryOpen
+    || state.machineOpen || state.settingsOpen || state.portrait) return;
   const moved = Math.hypot(event.clientX - tap.x, event.clientY - tap.y);
   if (moved > 12 || performance.now() - tap.time > 420) return;
   handleWorldTap(event.clientX, event.clientY);
@@ -1983,6 +3217,15 @@ function handleWorldTap(clientX, clientY) {
     if (dx * dx + dz * dz > (PICKUP_RANGE + 0.6) * (PICKUP_RANGE + 0.6)) continue;
     candidates.push(item.mesh);
   }
+
+  for (const rock of ironRocks) {
+    if (rock.broken) continue;
+    if (Math.hypot(player.position.x - rock.x, player.position.z - rock.z) > TREE_INTERACT_RANGE + 0.8) continue;
+    candidates.push(rock.group);
+  }
+
+  if (getMachineDistance() < MACHINE_INTERACT_RANGE + 2) candidates.push(machine);
+
   if (candidates.length === 0) return;
 
   const hits = tapRaycaster.intersectObjects(candidates, true);
@@ -1992,6 +3235,20 @@ function handleWorldTap(clientX, clientY) {
   while (object) {
     if (object.userData.itemRef) {
       pickUpItem(object.userData.itemRef);
+      return;
+    }
+    if (object.userData.rockRef) {
+      const rock = object.userData.rockRef;
+      if (!canMineTool(state.equippedTool)) {
+        showToast('Equip the pickaxe to mine iron');
+        return;
+      }
+      mineIronRock(rock);
+      return;
+    }
+    if (object.userData.machineRef) {
+      if (getMachineDistance() <= MACHINE_INTERACT_RANGE) openMachinePanel();
+      else showToast('Move closer to the machine');
       return;
     }
     object = object.parent;
@@ -2026,6 +3283,9 @@ function resetToMenu(title, subtitle, hint, buttonText) {
   deathBanner.classList.remove('visible');
   toastEl.classList.remove('visible');
   setInventoryOpen(false);
+  closeMachinePanel();
+  setSettingsOpen(false);
+  stopMachineSound();
   state.equippedTool = null;
   state.equipTimer = 0;
   updateToolModels();
@@ -2034,20 +3294,25 @@ function resetToMenu(title, subtitle, hint, buttonText) {
 }
 
 function attack() {
-  if (!state.started || state.gameOver || state.falling || state.paused || state.attackCooldown > 0) return;
-  if (state.equippedTool !== 'axe') {
-    showToast('Equip the axe to attack');
+  if (!state.started || state.gameOver || state.falling || state.paused || state.machineOpen || state.settingsOpen) return;
+  if (state.attackCooldown > 0) return;
+  const stats = TOOL_STATS[state.equippedTool];
+  if (!stats) {
+    showToast(state.equippedTool === 'backpack' ? 'Unequip the backpack to fight' : 'Equip a tool to attack');
     return;
   }
 
-  state.attackCooldown = 0.58;
+  state.attackCooldown = stats.cooldown;
   state.attackTimer = ATTACK_DURATION;
   strikeArc.visible = true;
   strikeArc.scale.setScalar(0.7);
   playerGlow.intensity = 1.8;
+  playAxeWhoosh();
 
-  if (state.targetTree) {
-    chopTree(state.targetTree);
+  if (state.targetRock && stats.rockPower > 0) {
+    mineIronRock(state.targetRock, stats.rockPower);
+  } else if (state.targetTree && stats.treePower > 0) {
+    chopTree(state.targetTree, stats.treePower);
   }
 
   const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
@@ -2056,16 +3321,17 @@ function attack() {
     const offset = enemy.position.clone().sub(player.position);
     offset.y = 0;
     const distance = offset.length();
-    if (distance > 3.3 || distance < 0.01) continue;
+    if (distance > stats.range || distance < 0.01) continue;
     offset.normalize();
     if (forward.dot(offset) < 0.2) continue;
 
     const data = enemy.userData;
-    data.health -= 1;
+    data.health -= stats.damage;
     data.hitTimer = 0.22;
     data.bodyMat.emissive.setHex(0xff2f1a);
     data.bodyMat.emissiveIntensity = 1.1;
-    data.knockback.addScaledVector(forward, 4.2);
+    data.knockback.addScaledVector(forward, 4.2 + stats.damage * 0.6);
+    playMeleeHit();
 
     hitEffect.position.copy(enemy.position);
     hitEffect.position.y += 1.15;
@@ -2108,7 +3374,9 @@ function beginFalling() {
   state.attackTimer = 0;
   strikeArc.visible = false;
   setInventoryOpen(false);
+  closeMachinePanel();
   deathBanner.classList.add('visible');
+  playSadTone();
   updateHud();
 }
 
@@ -2176,7 +3444,8 @@ function spawnNightWave() {
 function getCampfireInfluence() {
   const dx = player.position.x - campfire.position.x;
   const dz = player.position.z - campfire.position.z;
-  return dx * dx + dz * dz < 7 * 7 ? 1 : 0;
+  const radius = getCampfireSafeRadius();
+  return dx * dx + dz * dz < radius * radius ? 1 : 0;
 }
 
 const PLAYER_SPEED = 6;
@@ -2185,9 +3454,11 @@ const JUMP_SPEED = 7.4;
 const GRAVITY = 17.5;
 
 function tryJump() {
-  if (!state.started || state.gameOver || state.falling || !state.grounded) return;
+  if (!state.started || state.gameOver || state.falling || !state.grounded
+    || state.machineOpen || state.settingsOpen || state.inventoryOpen) return;
   state.velocityY = JUMP_SPEED;
   state.grounded = false;
+  playJumpSound();
 }
 
 function updatePlayerVertical(delta) {
@@ -2205,12 +3476,14 @@ function updatePlayerVertical(delta) {
     return;
   }
 
+  const fallSpeed = state.velocityY;
   state.velocityY -= GRAVITY * delta;
   player.position.y += state.velocityY * delta;
   if (player.position.y <= groundY) {
     player.position.y = groundY;
     state.velocityY = 0;
     state.grounded = true;
+    if (fallSpeed < -2.4) playLandSound();
   }
 }
 
@@ -2229,9 +3502,53 @@ function resolveTreeCollisions() {
   }
 }
 
+function resolveWorldPropCollisions(entity, entityRadius = PLAYER_RADIUS) {
+  for (const prop of solidProps) {
+    if (prop.rock && prop.rock.broken) continue;
+    const dx = entity.position.x - prop.x;
+    const dz = entity.position.z - prop.z;
+    const radius = prop.radius + entityRadius;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq >= radius * radius) continue;
+    if (distanceSq < 0.0001) {
+      // Exactly on the prop: pick a deterministic direction to escape.
+      entity.position.x = prop.x + radius;
+      continue;
+    }
+    const distance = Math.sqrt(distanceSq);
+    const push = radius - distance;
+    entity.position.x += (dx / distance) * push;
+    entity.position.z += (dz / distance) * push;
+  }
+
+  for (const wall of placedWalls) {
+    const dx = entity.position.x - wall.x;
+    const dz = entity.position.z - wall.z;
+    const cos = Math.cos(wall.rotation);
+    const sin = Math.sin(wall.rotation);
+    let localX = dx * cos - dz * sin;
+    let localZ = dx * sin + dz * cos;
+    const halfWidth = wall.width / 2 + entityRadius;
+    const halfDepth = wall.depth / 2 + entityRadius;
+    if (Math.abs(localX) >= halfWidth || Math.abs(localZ) >= halfDepth) continue;
+
+    const pushX = halfWidth - Math.abs(localX);
+    const pushZ = halfDepth - Math.abs(localZ);
+    if (pushX < pushZ) {
+      localX = Math.sign(localX || 1) * halfWidth;
+    } else {
+      localZ = Math.sign(localZ || 1) * halfDepth;
+    }
+
+    entity.position.x = wall.x + localX * cos + localZ * sin;
+    entity.position.z = wall.z - localX * sin + localZ * cos;
+  }
+}
+
 function checkAutoJump(nextX, nextZ, moveDir) {
   if (!state.grounded) return;
   for (const obstacle of lowObstacles) {
+    if (obstacle.rock && obstacle.rock.broken) continue;
     const dx = nextX - obstacle.x;
     const dz = nextZ - obstacle.z;
     const reach = obstacle.radius + PLAYER_RADIUS + 0.12;
@@ -2275,6 +3592,7 @@ function movePlayer(delta) {
   player.position.x = nextX;
   player.position.z = nextZ;
   resolveTreeCollisions();
+  resolveWorldPropCollisions(player);
   player.position.x = clamp(player.position.x, -30, 30);
   player.position.z = clamp(player.position.z, -30, 30);
 }
@@ -2421,7 +3739,7 @@ function updateEnemies(delta) {
       const nx = fx / fireDistance;
       const nz = fz / fireDistance;
 
-      if (fireDistance < FIRE_SCARE_RADIUS + 1.2) {
+      if (fireDistance < getFireScareRadius() + 1.2) {
         stepX += -nz * data.circleDir * data.speed * delta * 0.5;
         stepZ += nx * data.circleDir * data.speed * delta * 0.5;
       }
@@ -2434,25 +3752,28 @@ function updateEnemies(delta) {
       const outX = enemy.position.x - campfire.position.x;
       const outZ = enemy.position.z - campfire.position.z;
       const outDistance = Math.hypot(outX, outZ) || 1;
-      if (outDistance < FIRE_SCARE_RADIUS - 0.05) {
-        nextX = campfire.position.x + (outX / outDistance) * FIRE_SCARE_RADIUS;
-        nextZ = campfire.position.z + (outZ / outDistance) * FIRE_SCARE_RADIUS;
+      if (outDistance < getFireScareRadius() - 0.05) {
+        nextX = campfire.position.x + (outX / outDistance) * getFireScareRadius();
+        nextZ = campfire.position.z + (outZ / outDistance) * getFireScareRadius();
       }
 
       const nextOutX = nextX - campfire.position.x;
       const nextOutZ = nextZ - campfire.position.z;
       const nextOutDistance = Math.hypot(nextOutX, nextOutZ) || 1;
-      if (nextOutDistance < FIRE_SCARE_RADIUS) {
+      if (nextOutDistance < getFireScareRadius()) {
         const keepX = enemy.position.x - campfire.position.x;
         const keepZ = enemy.position.z - campfire.position.z;
         const keepDistance = Math.hypot(keepX, keepZ) || 1;
-        nextX = campfire.position.x + (keepX / keepDistance) * FIRE_SCARE_RADIUS;
-        nextZ = campfire.position.z + (keepZ / keepDistance) * FIRE_SCARE_RADIUS;
+        nextX = campfire.position.x + (keepX / keepDistance) * getFireScareRadius();
+        nextZ = campfire.position.z + (keepZ / keepDistance) * getFireScareRadius();
       }
     }
 
     enemy.position.x = clamp(nextX, -46, 46);
     enemy.position.z = clamp(nextZ, -46, 46);
+    resolveWorldPropCollisions(enemy, 0.36);
+    enemy.position.x = clamp(enemy.position.x, -46, 46);
+    enemy.position.z = clamp(enemy.position.z, -46, 46);
     enemy.position.y = getGroundHeight(enemy.position.x, enemy.position.z);
 
     const faceX = targetX - enemy.position.x;
@@ -2547,8 +3868,8 @@ function updateCampfire(delta) {
     fireFlameInner.position.y = 0.42 + innerHeight * 0.5 + Math.sin(t * 10 + 1) * 0.03;
     fireFlameInner.rotation.z = Math.sin(t * 4.7 + 1) * 0.07;
 
-    fireGlow.intensity = (2 + ratio * 1.8) * flicker + state.fireFlare * 3.2;
-    warmLight.intensity = (0.6 + ratio * 0.8) * flicker + state.fireFlare * 1.8;
+    fireGlow.intensity = (2 + ratio * 1.8 + state.fireLevel * 0.55) * flicker + state.fireFlare * 3.2;
+    warmLight.intensity = (0.6 + ratio * 0.8 + state.fireLevel * 0.28) * flicker + state.fireFlare * 1.8;
     sparkMaterial.opacity = 0.55 + ratio * 0.3 + Math.sin(t * 13) * 0.1;
     updateSparks(delta, ratio);
   } else {
@@ -2641,6 +3962,8 @@ function updateDayNight(delta) {
   if (wrapped) {
     state.nightActive = false;
     regrowBerries();
+    playNightSurvivedChime();
+    showToast('You survived the night');
     if (state.night >= state.maxNight) {
       state.victory = true;
       state.started = false;
@@ -2711,6 +4034,506 @@ function updateCamera() {
   camera.lookAt(cameraTarget);
 }
 
+// ---------- Generated audio ----------
+
+const audio = {
+  ctx: null,
+  master: null,
+  noiseBuffer: null,
+  started: false,
+  volume: 0.7,
+  muted: false,
+  windGain: null,
+  cricketGain: null,
+  fireGain: null,
+  stepTimer: 0.22,
+  fireCrackleTimer: 0.2,
+  birdTimer: 2.5,
+  growlTimer: 1.8,
+  monsterStepTimer: 0.5,
+  heartbeatTimer: 0,
+  machineRunning: false,
+  machineOsc: null,
+  machineOsc2: null,
+  machineGain: null
+};
+
+function audioReady() {
+  return !!audio.ctx && audio.started;
+}
+
+function audioNow() {
+  return audio.ctx ? audio.ctx.currentTime : 0;
+}
+
+function makeNoiseBuffer(ctx) {
+  const length = Math.floor(ctx.sampleRate * 2);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < length; i += 1) {
+    const white = Math.random() * 2 - 1;
+    last = last * 0.72 + white * 0.28;
+    data[i] = last * 1.15;
+  }
+  return buffer;
+}
+
+function initAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    if (!audio.ctx) {
+      const ctx = new Ctx();
+      audio.ctx = ctx;
+      audio.master = ctx.createGain();
+      audio.master.gain.value = audio.muted ? 0 : audio.volume;
+      audio.master.connect(ctx.destination);
+      audio.noiseBuffer = makeNoiseBuffer(ctx);
+
+      const wind = ctx.createBufferSource();
+      wind.buffer = audio.noiseBuffer;
+      wind.loop = true;
+      const windFilter = ctx.createBiquadFilter();
+      windFilter.type = 'lowpass';
+      windFilter.frequency.value = 460;
+      windFilter.Q.value = 0.55;
+      audio.windGain = ctx.createGain();
+      audio.windGain.gain.value = 0.012;
+      wind.connect(windFilter).connect(audio.windGain).connect(audio.master);
+      wind.start();
+
+      const crickets = ctx.createBufferSource();
+      crickets.buffer = audio.noiseBuffer;
+      crickets.loop = true;
+      const cricketFilter = ctx.createBiquadFilter();
+      cricketFilter.type = 'bandpass';
+      cricketFilter.frequency.value = 4300;
+      cricketFilter.Q.value = 7;
+      audio.cricketGain = ctx.createGain();
+      audio.cricketGain.gain.value = 0.0001;
+      const cricketLfo = ctx.createOscillator();
+      cricketLfo.type = 'sine';
+      cricketLfo.frequency.value = 5.1;
+      const cricketLfoGain = ctx.createGain();
+      cricketLfoGain.gain.value = 0.006;
+      cricketLfo.connect(cricketLfoGain).connect(audio.cricketGain.gain);
+      crickets.connect(cricketFilter).connect(audio.cricketGain).connect(audio.master);
+      crickets.start();
+      cricketLfo.start();
+
+      const fire = ctx.createBufferSource();
+      fire.buffer = audio.noiseBuffer;
+      fire.loop = true;
+      const fireFilter = ctx.createBiquadFilter();
+      fireFilter.type = 'bandpass';
+      fireFilter.frequency.value = 760;
+      fireFilter.Q.value = 0.6;
+      audio.fireGain = ctx.createGain();
+      audio.fireGain.gain.value = 0.0001;
+      fire.connect(fireFilter).connect(audio.fireGain).connect(audio.master);
+      fire.start();
+    }
+
+    audio.started = true;
+    if (audio.ctx.state === 'suspended') audio.ctx.resume();
+  } catch (error) {
+    audio.started = false;
+  }
+}
+
+function playTone(freq, endFreq, duration, type = 'sine', gain = 0.04, when = 0, attack = 0.008) {
+  if (!audioReady()) return;
+  const ctx = audio.ctx;
+  const start = audioNow() + Math.max(0, when);
+  const osc = ctx.createOscillator();
+  const env = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(Math.max(20, freq), start);
+  if (endFreq && endFreq !== freq) {
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), start + duration);
+  }
+  env.gain.setValueAtTime(0.0001, start);
+  env.gain.linearRampToValueAtTime(gain, start + attack);
+  env.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(env).connect(audio.master);
+  osc.start(start);
+  osc.stop(start + duration + 0.04);
+}
+
+function playNoise(duration, gain, filterType = 'lowpass', freq = 900, freqEnd = 0, Q = 0.8, when = 0) {
+  if (!audioReady()) return;
+  const ctx = audio.ctx;
+  const start = audioNow() + Math.max(0, when);
+  const source = ctx.createBufferSource();
+  source.buffer = audio.noiseBuffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.setValueAtTime(Math.max(40, freq), start);
+  if (freqEnd) filter.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), start + duration);
+  filter.Q.value = Q;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, start);
+  env.gain.linearRampToValueAtTime(gain, start + 0.006);
+  env.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  source.connect(filter).connect(env).connect(audio.master);
+  source.start(start, Math.random() * 1.2, duration + 0.04);
+}
+
+function playPickupSound() {
+  playTone(520, 760, 0.08, 'sine', 0.045);
+  playTone(880, 980, 0.06, 'triangle', 0.024, 0.055);
+}
+
+function playEquipClick() {
+  playNoise(0.035, 0.025, 'highpass', 1900, 0, 0.8);
+  playTone(300, 220, 0.055, 'square', 0.018);
+}
+
+function playUpgradeChime() {
+  const notes = [523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((freq, index) => {
+    playTone(freq, freq, 0.52, 'triangle', 0.04, index * 0.085);
+    playTone(freq * 2, freq * 2, 0.32, 'sine', 0.014, index * 0.085 + 0.008);
+  });
+}
+
+function playUpgradeDing() {
+  playTone(1046.5, 1046.5, 0.7, 'sine', 0.055);
+  playTone(1568, 1568, 0.55, 'sine', 0.028, 0.02);
+  playTone(2093, 2093, 0.4, 'triangle', 0.014, 0.03);
+}
+
+function playNightSurvivedChime() {
+  const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+  notes.forEach((freq, index) => {
+    playTone(freq, freq, 0.62, 'triangle', 0.045, index * 0.1);
+    playTone(freq * 1.5, freq * 1.5, 0.34, 'sine', 0.012, index * 0.1 + 0.01);
+  });
+}
+
+function playSadTone() {
+  playTone(330, 120, 1.1, 'sawtooth', 0.045, 0, 0.02);
+  playTone(220, 82, 1.3, 'sine', 0.05, 0.04, 0.02);
+  playNoise(0.9, 0.025, 'lowpass', 420, 110);
+}
+
+function playAxeWhoosh() {
+  playNoise(0.18, 0.055, 'bandpass', 950, 260, 1.1);
+}
+
+function playTreeThud() {
+  playTone(132, 52, 0.18, 'sine', 0.11);
+  playNoise(0.14, 0.055, 'lowpass', 320, 130);
+}
+
+function playTreeCrash() {
+  playNoise(0.85, 0.09, 'lowpass', 950, 120, 0.7);
+  playTone(90, 38, 0.63, 'sine', 0.08, 0.04);
+  playNoise(0.35, 0.04, 'bandpass', 1800, 700, 1.4, 0.08);
+}
+
+function playRockClink() {
+  playTone(1850, 1450, 0.075, 'triangle', 0.038);
+  playTone(2650, 2100, 0.055, 'sine', 0.02, 0.012);
+  playNoise(0.045, 0.025, 'highpass', 2400, 0, 0.9);
+}
+
+function playRockBreak() {
+  playRockClink();
+  playNoise(0.38, 0.08, 'lowpass', 720, 140, 0.8);
+  playTone(190, 60, 0.34, 'sine', 0.06, 0.02);
+}
+
+function playMeleeHit() {
+  playTone(170, 70, 0.14, 'sine', 0.075);
+  playNoise(0.1, 0.045, 'bandpass', 680, 250, 0.9);
+}
+
+function playJumpSound() {
+  playTone(220, 360, 0.15, 'sine', 0.03);
+  playNoise(0.11, 0.022, 'highpass', 900, 0);
+}
+
+function playLandSound() {
+  playTone(115, 52, 0.17, 'sine', 0.075);
+  playNoise(0.12, 0.04, 'lowpass', 360, 130);
+}
+
+function playFootstep() {
+  const pitch = 72 + Math.random() * 28;
+  playTone(pitch, pitch * 0.7, 0.075, 'sine', 0.028);
+  playNoise(0.075, 0.022, 'lowpass', 480 + Math.random() * 180, 0, 0.7);
+}
+
+function playFireCrackle(proximity) {
+  const gain = 0.008 + proximity * 0.03;
+  playNoise(0.025 + Math.random() * 0.04, gain, 'highpass', 900 + Math.random() * 1400, 0, 0.9);
+}
+
+function playBirdChirp() {
+  const base = 2100 + Math.random() * 900;
+  const count = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < count; i += 1) {
+    playTone(base + Math.random() * 250, base + 700 + Math.random() * 500, 0.085, 'sine', 0.018, i * 0.11, 0.012);
+  }
+}
+
+function playGrowl(proximity) {
+  if (!audioReady()) return;
+  const ctx = audio.ctx;
+  const start = audioNow();
+  const osc = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const env = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(76, start);
+  osc.frequency.exponentialRampToValueAtTime(44, start + 0.75);
+  filter.type = 'lowpass';
+  filter.frequency.value = 190;
+  filter.Q.value = 1.2;
+  env.gain.setValueAtTime(0.0001, start);
+  env.gain.linearRampToValueAtTime(0.012 + proximity * 0.045, start + 0.08);
+  env.gain.exponentialRampToValueAtTime(0.0001, start + 0.78);
+  osc.connect(filter).connect(env).connect(audio.master);
+  osc.start(start);
+  osc.stop(start + 0.82);
+  playNoise(0.5, 0.008 + proximity * 0.018, 'lowpass', 260, 90);
+}
+
+function playMonsterStep(proximity) {
+  const gain = 0.01 + proximity * 0.045;
+  playTone(62, 34, 0.12, 'sine', gain);
+  playNoise(0.1, gain * 0.55, 'lowpass', 250, 100);
+}
+
+function playHeartbeat(proximity) {
+  const gain = 0.018 + proximity * 0.055;
+  playTone(58, 44, 0.1, 'sine', gain);
+  playTone(52, 38, 0.12, 'sine', gain * 0.7, 0.16);
+}
+
+function playMachineClank() {
+  playNoise(0.04, 0.02, 'highpass', 1700, 0, 1.2);
+  playTone(390, 330, 0.06, 'square', 0.012);
+}
+
+function startMachineSound() {
+  if (!audioReady() || audio.machineRunning) return;
+  try {
+    const ctx = audio.ctx;
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 55;
+    osc2.type = 'square';
+    osc2.frequency.value = 82.5;
+    filter.type = 'lowpass';
+    filter.frequency.value = 230;
+    filter.Q.value = 0.7;
+    gain.gain.setValueAtTime(0.0001, audioNow());
+    gain.gain.linearRampToValueAtTime(0.018, audioNow() + 0.18);
+    osc.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain).connect(audio.master);
+    osc.start();
+    osc2.start();
+    audio.machineOsc = osc;
+    audio.machineOsc2 = osc2;
+    audio.machineGain = gain;
+    audio.machineRunning = true;
+  } catch (error) {
+    audio.machineRunning = false;
+  }
+}
+
+function stopMachineSound() {
+  if (!audio.machineRunning) return;
+  audio.machineRunning = false;
+  try {
+    const now = audioNow();
+    audio.machineGain.gain.cancelScheduledValues(now);
+    audio.machineGain.gain.setValueAtTime(Math.max(0.0001, audio.machineGain.gain.value), now);
+    audio.machineGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    audio.machineOsc.stop(now + 0.2);
+    audio.machineOsc2.stop(now + 0.2);
+  } catch (error) {
+    // The machine oscillators may already have stopped; ignore cleanup errors.
+  }
+  audio.machineOsc = null;
+  audio.machineOsc2 = null;
+  audio.machineGain = null;
+}
+
+function updateAudioToggleUi() {
+  audioToggle.classList.toggle('muted', audio.muted);
+  audioToggle.setAttribute('aria-pressed', String(audio.muted));
+  audioToggle.setAttribute('aria-label', audio.muted ? 'Unmute sound' : 'Mute sound');
+}
+
+function applyMasterGain() {
+  if (!audio.master) return;
+  const now = audioNow();
+  const target = audio.muted ? 0 : audio.volume;
+  audio.master.gain.cancelScheduledValues(now);
+  audio.master.gain.setValueAtTime(audio.master.gain.value, now);
+  audio.master.gain.linearRampToValueAtTime(target, now + 0.06);
+}
+
+function setAudioVolume(value) {
+  audio.volume = clamp(value, 0, 1);
+  applyMasterGain();
+  volumeValue.textContent = `${Math.round(audio.volume * 100)}%`;
+}
+
+function toggleAudioMute() {
+  initAudio();
+  audio.muted = !audio.muted;
+  applyMasterGain();
+  updateAudioToggleUi();
+  playEquipClick();
+}
+
+function setSettingsOpen(open) {
+  state.settingsOpen = open;
+  settingsPanel.classList.toggle('hidden', !open);
+  settingsBtn.setAttribute('aria-expanded', String(open));
+  if (open) {
+    closeMachinePanel();
+    setInventoryOpen(false);
+  }
+  updateToolUi();
+}
+
+function updateAudio(delta) {
+  if (!audioReady()) return;
+  const now = audioNow();
+  const night = 1 - state.daylight;
+  const running = state.started && !state.gameOver && !state.paused;
+  const peace = !state.started || state.gameOver || state.paused;
+
+  audio.windGain.gain.setTargetAtTime(
+    peace ? 0.007 : 0.007 + state.daylight * 0.03 + night * 0.012,
+    now,
+    0.7
+  );
+  audio.cricketGain.gain.setTargetAtTime(peace ? 0.0001 : night * 0.017, now, 0.85);
+
+  const fireDistance = getCampfireDistance();
+  const fireProximity = clamp(1 - fireDistance / 18, 0, 1);
+  const fireBurning = state.started && !state.fireOut && !state.gameOver;
+  const fireRatio = clamp(state.fuel / 100, 0, 1);
+  audio.fireGain.gain.setTargetAtTime(
+    fireBurning ? (0.004 + fireProximity * 0.042) * (0.45 + fireRatio * 0.55) : 0.0001,
+    now,
+    0.35
+  );
+
+  if (fireBurning && !state.paused && fireProximity > 0.04) {
+    audio.fireCrackleTimer -= delta;
+    if (audio.fireCrackleTimer <= 0) {
+      playFireCrackle(fireProximity);
+      audio.fireCrackleTimer = 0.13 + Math.random() * 0.42 + (1 - fireProximity) * 0.55;
+    }
+  }
+
+  if (running && state.daylight > 0.55) {
+    audio.birdTimer -= delta * (0.7 + state.daylight * 0.7);
+    if (audio.birdTimer <= 0) {
+      playBirdChirp();
+      audio.birdTimer = 3 + Math.random() * 6;
+    }
+  } else {
+    audio.birdTimer = Math.max(audio.birdTimer, 1.5);
+  }
+
+  if (running && state.grounded && state.moveSpeed > 0.1 && state.falling <= 0) {
+    audio.stepTimer -= delta * (0.8 + (state.moveSpeed / PLAYER_SPEED) * 0.8);
+    if (audio.stepTimer <= 0) {
+      playFootstep();
+      audio.stepTimer = 0.31;
+    }
+  } else {
+    audio.stepTimer = Math.min(audio.stepTimer, 0.16);
+  }
+
+  let nearest = null;
+  let nearestDistance = Infinity;
+  if (running) {
+    for (const enemy of enemies) {
+      if (!enemy.visible || enemy.userData.fading) continue;
+      const distance = Math.hypot(
+        player.position.x - enemy.position.x,
+        player.position.z - enemy.position.z
+      );
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = enemy;
+      }
+    }
+  }
+
+  if (nearest && nearestDistance < 21) {
+    const proximity = clamp(1 - nearestDistance / 21, 0, 1);
+    audio.growlTimer -= delta * (1 + proximity * 2.2);
+    if (audio.growlTimer <= 0) {
+      playGrowl(proximity);
+      audio.growlTimer = 2.8 + Math.random() * 4.5;
+    }
+
+    audio.monsterStepTimer -= delta * (1 + proximity * 0.8);
+    if (audio.monsterStepTimer <= 0) {
+      playMonsterStep(proximity);
+      audio.monsterStepTimer = 0.45 + Math.random() * 0.35;
+    }
+
+    if (nearestDistance < 15) {
+      audio.heartbeatTimer -= delta;
+      if (audio.heartbeatTimer <= 0) {
+        playHeartbeat(proximity);
+        audio.heartbeatTimer = 1.15 - proximity * 0.72 + Math.random() * 0.08;
+      }
+    } else {
+      audio.heartbeatTimer = 0;
+    }
+  } else {
+    audio.growlTimer = Math.max(audio.growlTimer, 1.4);
+    audio.monsterStepTimer = Math.max(audio.monsterStepTimer, 0.4);
+    audio.heartbeatTimer = 0;
+  }
+
+  if ((!running || state.falling > 0) && audio.machineRunning) stopMachineSound();
+}
+
+window.addEventListener('pointerdown', initAudio, { capture: true, passive: true });
+window.addEventListener('keydown', initAudio, { capture: true });
+
+audioToggle.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  toggleAudioMute();
+});
+
+settingsBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setSettingsOpen(!state.settingsOpen);
+});
+
+closeSettingsBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  setSettingsOpen(false);
+});
+
+volumeSlider.addEventListener('input', () => {
+  setAudioVolume(Number(volumeSlider.value) / 100);
+});
+
+setAudioVolume(audio.volume);
+updateAudioToggleUi();
+
 function animate() {
   requestAnimationFrame(animate);
   const rawDelta = clock.getDelta();
@@ -2780,6 +4603,8 @@ function animate() {
       updateGroundItems(delta);
       updatePlantedSaplings(delta);
       updateCampfire(delta);
+      updateMachine(delta);
+      updateIronRocks(delta);
       updateHud();
       updateInteractPrompt();
     } else {
@@ -2803,6 +4628,7 @@ function animate() {
     overlay.classList.remove('hidden');
   }
 
+  updateAudio(delta);
   applyDayNightVisuals();
   updateCamera();
   renderer.render(scene, camera);
@@ -2815,6 +4641,7 @@ window.addEventListener('resize', () => {
 });
 
 regrowBerries();
+spawnStarterIron();
 updateHud();
 applyDayNightVisuals();
 if (import.meta.env.DEV) {
@@ -2860,7 +4687,28 @@ if (import.meta.env.DEV) {
     fellTree,
     getGroundHeight,
     startGame,
-    showToast
+    showToast,
+    ironRocks,
+    machine,
+    machineState,
+    placedWalls,
+    UPGRADES,
+    startUpgrade,
+    addMachineFuel,
+    mineIronRock,
+    updateMachine,
+    updateMachinePanel,
+    updateIronRocks,
+    openMachinePanel,
+    closeMachinePanel,
+    setSettingsOpen,
+    applyBiggerCampfire,
+    createIronWall,
+    resolveWorldPropCollisions,
+    audio,
+    initAudio,
+    setAudioVolume,
+    toggleAudioMute
   };
 }
 animate();
