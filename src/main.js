@@ -1185,6 +1185,7 @@ function startGame() {
   state.nightActive = false;
   state.attackCooldown = 0;
   state.attackTimer = 0;
+  state.damageFlash = 0;
   state.nearFire = true;
   state.keys.clear();
   state.cameraYaw = 0;
@@ -1407,6 +1408,7 @@ function respawnAtCamp() {
   state.falling = 0;
   state.health = 100;
   state.invuln = 2;
+  state.damageFlash = 0;
   state.velocityY = 0;
   state.grounded = true;
   state.attackCooldown = 0;
@@ -1447,7 +1449,7 @@ function spawnNightWave() {
 
     const data = enemy.userData;
     data.dead = false;
-    data.health = 2 + Math.floor((state.night - 1) / 8);
+    data.health = Math.min(8, 2 + Math.floor((state.night - 1) / 12));
     data.maxHealth = data.health;
     data.speed = Math.min(3.5, 1.15 + state.night * 0.045 + Math.random() * 0.22);
     data.damage = Math.min(22, 6 + state.night * 0.3);
@@ -1679,7 +1681,7 @@ function updateEnemies(delta) {
 
     let targetX = player.position.x;
     let targetZ = player.position.z;
-    if (data.targetCamp && playerDistance > 10) {
+    if (data.targetCamp && playerDistance > 10 && !state.fireOut) {
       targetX = campfire.position.x;
       targetZ = campfire.position.z;
     }
@@ -1861,14 +1863,14 @@ function applyDayNightVisuals() {
   scene.fog.density = 0.018 + nightFactor * 0.04;
 
   ambient.color.copy(ambientDayColor).lerp(ambientNightColor, nightFactor);
-  ambient.intensity = 1.0 - nightFactor * 0.5;
+  ambient.intensity = 1.0 - nightFactor * 0.45;
   moonLight.color.copy(sunDayColor).lerp(moonNightColor, nightFactor);
-  moonLight.intensity = 1.25 - nightFactor * 0.62;
+  moonLight.intensity = 1.25 - nightFactor * 0.55;
 
   phaseIcon.classList.toggle('night', nightFactor > 0.5);
 
   const fireOutExtra = state.started && state.fireOut ? 0.1 : 0;
-  darkness.style.opacity = String(clamp(nightFactor * 0.34 + fireOutExtra, 0, 0.85));
+  darkness.style.opacity = String(clamp(nightFactor * 0.3 + fireOutExtra, 0, 0.85));
 }
 
 function updateDayNight(delta) {
@@ -2069,7 +2071,10 @@ if (import.meta.env.DEV) {
     plantedSaplings,
     spawnNightWave,
     startEnemyFade,
-    plantSapling
+    plantSapling,
+    interact,
+    attack,
+    getGroundHeight
   };
 }
 animate();

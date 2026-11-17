@@ -443,8 +443,7 @@ button:active {
 
 #deathBanner strong {
   font-size: clamp(30px, 6vw, 52px);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: #ff8b82;
   text-shadow: 0 0 24px rgba(255, 70, 60, 0.55);
 }
@@ -564,31 +563,44 @@ button:active {
   }
 
   .panel {
-    min-width: 72px;
-    padding: 8px 10px;
+    min-width: 76px;
+    padding: 7px 8px;
   }
 
   .panel.center {
-    min-width: 148px;
-    padding: 7px 9px;
+    min-width: 132px;
+    padding: 7px 8px;
   }
 
   .stats-panel {
-    min-width: 86px;
+    min-width: 100px;
+  }
+
+  .panel.right {
+    min-width: 82px;
   }
 
   .stat-line {
-    gap: 8px;
+    gap: 6px;
+  }
+
+  .stats-panel .label {
+    font-size: 9px;
+    letter-spacing: 0.08em;
   }
 
   .mini-value {
-    font-size: 15px;
+    font-size: 14px;
+  }
+
+  .night-line .mini-value {
+    font-size: 13px;
   }
 
   .phase-icon {
-    width: 12px;
-    height: 12px;
-    flex-basis: 12px;
+    width: 11px;
+    height: 11px;
+    flex-basis: 11px;
   }
 
   #joystickZone {
@@ -633,5 +645,33 @@ button:active {
     width: 94px;
     height: 94px;
     font-size: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  #hud {
+    gap: 4px;
+    padding: 0 6px;
+  }
+
+  .stats-panel {
+    min-width: 92px;
+  }
+
+  .panel.center {
+    min-width: 116px;
+  }
+
+  .panel.right {
+    min-width: 76px;
+  }
+
+  .stats-panel .label {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  .night-line .mini-value {
+    font-size: 12px;
   }
 }
