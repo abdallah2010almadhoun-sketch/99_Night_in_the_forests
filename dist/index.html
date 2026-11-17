@@ -6,15 +6,15 @@
     <title>99 Nights</title>
     <meta name="description" content="99 Nights - low-poly survival in a dark forest" />
     <link rel="icon" href="data:," />
-    <script type="module" crossorigin src="./assets/index-BiuY7tb-.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DSDB_MPF.css">
+    <script type="module" crossorigin src="./assets/index-B0NeWJ8f.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BJdx9ofM.css">
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="darkness" aria-hidden="true"></div>
 
     <div id="hud">
-      <div class="panel left stats-panel">
+      <div class="panel stats-panel">
         <div class="stat-line night-line">
           <span class="label">NIGHT</span>
           <span class="night-phase">
@@ -22,15 +22,13 @@
             <span id="nightText" class="mini-value">1 / 99</span>
           </span>
         </div>
-        <div class="stat-line">
-          <span class="label">WOOD</span>
-          <span id="woodText" class="mini-value">0</span>
-        </div>
-        <div class="stat-line">
-          <span class="label">SAPLING</span>
-          <span id="saplingText" class="mini-value">0</span>
+        <div class="counter-row">
+          <span class="counter"><span class="dot wood"></span><span class="label">WOOD</span><b id="woodText">0</b></span>
+          <span class="counter"><span class="dot sapling"></span><span class="label">SAP</span><b id="saplingText">0</b></span>
+          <span class="counter"><span class="dot berry"></span><span class="label">BERRY</span><b id="berryText">0</b></span>
         </div>
       </div>
+
       <div class="panel center fire-panel">
         <div class="fuel-header">
           <span class="label">CAMPFIRE</span>
@@ -41,12 +39,18 @@
         </div>
         <div id="statusText" class="status">Fire is strong</div>
       </div>
-      <div class="panel right health-panel">
-        <div class="label">HEALTH</div>
-        <div id="healthText" class="value">100</div>
-        <div class="health-track">
-          <div id="healthFill" class="health-fill"></div>
+
+      <div class="panel vitals-panel">
+        <div class="vital-head">
+          <span class="label">HEALTH</span>
+          <span id="healthText" class="mini-value health-value">100</span>
         </div>
+        <div class="health-track"><div id="healthFill" class="health-fill"></div></div>
+        <div class="vital-head hunger-head">
+          <span class="label">HUNGER</span>
+          <span id="hungerText" class="mini-value hunger-value">100</span>
+        </div>
+        <div class="hunger-track"><div id="hungerFill" class="hunger-fill"></div></div>
       </div>
     </div>
 
@@ -55,6 +59,7 @@
       <strong>You fell</strong>
       <span>The dark takes you back to the fire...</span>
     </div>
+    <div id="toast" aria-live="polite"></div>
 
     <div id="joystickZone" aria-label="Move joystick">
       <div id="joystickBase">
@@ -62,24 +67,74 @@
       </div>
     </div>
 
-    <button id="plantBtn" aria-label="Plant a sapling">
-      <span id="plantLabel">PLANT</span>
-      <span id="plantKey">Q</span>
-    </button>
-    <button id="interactBtn" aria-label="Interact or chop">
-      <span id="interactLabel">INTERACT</span>
-      <span id="interactKey">E</span>
-    </button>
-    <button id="attackBtn" aria-label="Swing your axe">ATTACK <span>SPACE</span></button>
-    <button id="jumpBtn" aria-label="Jump">JUMP <span>SHIFT</span></button>
-    <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG LOOK · E INTERACT · SPACE ATTACK · Q PLANT · SHIFT JUMP</div>
+    <div id="actionCluster" aria-label="Action buttons">
+      <button id="attackBtn" class="action-btn" aria-label="Attack or chop">
+        <span id="attackLabel">ATTACK</span>
+        <small>SPACE</small>
+      </button>
+      <button id="interactBtn" class="action-btn" aria-label="Interact">
+        <span id="interactLabel">INTERACT</span>
+        <small>E</small>
+      </button>
+      <button id="dropBtn" class="action-btn" aria-label="Drop items">
+        <span>DROP</span>
+        <small>F</small>
+      </button>
+      <button id="jumpBtn" class="action-btn" aria-label="Jump">
+        <span>JUMP</span>
+        <small>SHIFT</small>
+      </button>
+    </div>
+
+    <div id="hotbar" aria-label="Hotbar">
+      <button id="axeSlot" class="hotbar-slot" data-tool="axe" aria-label="Axe" aria-pressed="false">
+        <span class="hotbar-num">1</span>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M18.6 39.8 29.2 14.2" fill="none" stroke="#9a6338" stroke-width="4.4" stroke-linecap="round" />
+          <path d="M27 13.2c4.6-3.9 10-4.5 13.6-2.2 1.4.9 2.6 2.2 3.5 3.8-5.1.3-9.7 2-12.9 5.4l-1.7 1.9-4-3.7 1.5-5.2Z" fill="#c7d1d8" stroke="#f1f6f8" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M29.8 21.2c2.3-3.4 5.8-5.5 9.8-6.3" fill="none" stroke="#7f8e98" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button id="backpackSlot" class="hotbar-slot" data-tool="backpack" aria-label="Backpack" aria-pressed="false">
+        <span class="hotbar-num">2</span>
+        <span id="backpackBadge" class="hotbar-badge">0/20</span>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="12" y="14" width="24" height="26" rx="7" fill="#8a5530" stroke="#d9a56b" stroke-width="1.4" />
+          <path d="M13 23.5h22" stroke="#5c351d" stroke-width="1.7" />
+          <path d="M15 15.5c0-4 3.7-7 9-7s9 3 9 7" fill="none" stroke="#5c351d" stroke-width="2.4" stroke-linecap="round" />
+          <rect x="17" y="27" width="14" height="9" rx="3" fill="#6a3e22" stroke="#4a2915" stroke-width="1.2" />
+          <rect x="21.5" y="29.5" width="5" height="4" rx="1.2" fill="#e0b260" />
+          <path d="M18 14v-3M30 14v-3" stroke="#d9a56b" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+
+    <div id="inventoryPanel" class="inventory-panel hidden" role="dialog" aria-label="Backpack inventory">
+      <div class="inventory-head">
+        <span class="inventory-title">BACKPACK</span>
+        <span id="inventoryCapacity" class="inventory-capacity">0 / 20</span>
+        <button id="closeInventoryBtn" class="inventory-close" aria-label="Close inventory">×</button>
+      </div>
+      <div id="inventoryList" class="inventory-list"></div>
+      <div class="inventory-foot">
+        <button id="unequipBtn" class="inventory-unequip">UNEQUIP</button>
+      </div>
+    </div>
+
+    <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG LOOK · E INTERACT · SPACE ATTACK · F DROP · 1 / 2 TOOLS</div>
     <div id="lookZone" aria-label="Look around"></div>
 
     <div id="startOverlay" class="overlay visible">
       <div class="title">99 Nights</div>
       <div class="subtitle">Chop wood. Feed the campfire. Survive 99 nights.</div>
-      <div class="hint">Gather wood by day. At night, shadow creatures hunt you. Keep the fire strong to hold them back.</div>
+      <div class="hint">Gather wood by day. At night, shadow creatures hunt you. Keep the fire strong to hold them back.<br />Equip the axe to chop, or the backpack to carry up to 20 items.</div>
       <button id="startBtn">Begin</button>
+    </div>
+
+    <div id="rotateOverlay" class="rotate-overlay" aria-live="assertive">
+      <div class="rotate-phone" aria-hidden="true"></div>
+      <strong>Rotate your phone</strong>
+      <span>99 Nights is played in landscape.</span>
     </div>
 
   </body>

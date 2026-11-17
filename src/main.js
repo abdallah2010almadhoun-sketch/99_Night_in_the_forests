@@ -12,19 +12,32 @@ const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
 const lookZone = document.getElementById('lookZone');
 const attackBtn = document.getElementById('attackBtn');
+const attackLabel = document.getElementById('attackLabel');
 const jumpBtn = document.getElementById('jumpBtn');
 const interactBtn = document.getElementById('interactBtn');
 const interactLabel = document.getElementById('interactLabel');
-const plantBtn = document.getElementById('plantBtn');
+const dropBtn = document.getElementById('dropBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
+const berryText = document.getElementById('berryText');
 const fuelText = document.getElementById('fuelText');
 const fuelFill = document.getElementById('fuelFill');
+const hungerText = document.getElementById('hungerText');
+const hungerFill = document.getElementById('hungerFill');
 const fireWarning = document.getElementById('fireWarning');
 const deathBanner = document.getElementById('deathBanner');
+const toastEl = document.getElementById('toast');
 const darkness = document.getElementById('darkness');
 const overlay = document.getElementById('startOverlay');
 const startBtn = document.getElementById('startBtn');
+const axeSlot = document.getElementById('axeSlot');
+const backpackSlot = document.getElementById('backpackSlot');
+const backpackBadge = document.getElementById('backpackBadge');
+const inventoryPanel = document.getElementById('inventoryPanel');
+const inventoryList = document.getElementById('inventoryList');
+const inventoryCapacity = document.getElementById('inventoryCapacity');
+const closeInventoryBtn = document.getElementById('closeInventoryBtn');
+const unequipBtn = document.getElementById('unequipBtn');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -282,6 +295,9 @@ avatar.add(leftArm);
 const leftArmMesh = makeAvatarPart(0.22, 0.78, 0.3, skinMaterial, 0.06);
 leftArmMesh.position.y = -0.39;
 leftArm.add(leftArmMesh);
+const leftHand = makeAvatarPart(0.2, 0.16, 0.26, skinMaterial, 0.05);
+leftHand.position.set(0, -0.8, 0.01);
+leftArm.add(leftHand);
 
 const rightArm = new THREE.Group();
 rightArm.position.set(0.54, 1.64, 0);
@@ -289,6 +305,9 @@ avatar.add(rightArm);
 const rightArmMesh = makeAvatarPart(0.22, 0.78, 0.3, skinMaterial, 0.06);
 rightArmMesh.position.y = -0.39;
 rightArm.add(rightArmMesh);
+const rightHand = makeAvatarPart(0.2, 0.16, 0.26, skinMaterial, 0.05);
+rightHand.position.set(0, -0.8, 0.01);
+rightArm.add(rightHand);
 
 const leftLeg = new THREE.Group();
 leftLeg.position.set(-0.2, 0.84, 0);
@@ -315,33 +334,105 @@ rightArm.add(lantern);
 // A low-poly axe held in the right hand. It rides with the arm swing so the
 // whole character animates the strike instead of the axe floating separately.
 const axe = new THREE.Group();
-axe.position.set(0.02, -0.74, 0.08);
-axe.rotation.set(-0.16, 0, -0.06);
+axe.position.set(0.12, -0.62, 0.1);
+axe.rotation.set(0.12, 0.08, -0.42);
 rightArm.add(axe);
 
 const axeHandle = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.036, 0.046, 0.92, 6),
+  new THREE.CylinderGeometry(0.038, 0.048, 0.95, 6),
   new THREE.MeshStandardMaterial({ color: 0x7b4a27, roughness: 0.82, metalness: 0.02 })
 );
 axeHandle.position.y = 0.06;
 axeHandle.castShadow = true;
 axe.add(axeHandle);
 
-const axeHead = new THREE.Mesh(
-  new THREE.BoxGeometry(0.3, 0.18, 0.09),
-  new THREE.MeshStandardMaterial({ color: 0xaebbc4, roughness: 0.34, metalness: 0.72 })
+const axeGrip = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.052, 0.052, 0.22, 6),
+  new THREE.MeshStandardMaterial({ color: 0x3b2413, roughness: 0.95 })
 );
-axeHead.position.set(0.1, 0.45, 0);
+axeGrip.position.y = -0.3;
+axeGrip.castShadow = true;
+axe.add(axeGrip);
+
+const axeHead = new THREE.Mesh(
+  new THREE.BoxGeometry(0.34, 0.2, 0.1),
+  new THREE.MeshStandardMaterial({
+    color: 0xb9c6ce,
+    emissive: 0x24313a,
+    emissiveIntensity: 0.4,
+    roughness: 0.3,
+    metalness: 0.65
+  })
+);
+axeHead.position.set(0.11, 0.42, 0);
 axeHead.castShadow = true;
 axe.add(axeHead);
 
 const axeBlade = new THREE.Mesh(
-  new THREE.BoxGeometry(0.16, 0.27, 0.06),
-  new THREE.MeshStandardMaterial({ color: 0xd5e0e5, roughness: 0.26, metalness: 0.82 })
+  new THREE.BoxGeometry(0.2, 0.3, 0.07),
+  new THREE.MeshStandardMaterial({
+    color: 0xe8f1f5,
+    emissive: 0x2f3f49,
+    emissiveIntensity: 0.45,
+    roughness: 0.24,
+    metalness: 0.55
+  })
 );
-axeBlade.position.set(0.24, 0.45, 0);
+axeBlade.position.set(0.27, 0.42, 0);
 axeBlade.castShadow = true;
 axe.add(axeBlade);
+axe.visible = false;
+
+const backpackMat = new THREE.MeshStandardMaterial({ color: 0x7c4a2a, roughness: 0.78, metalness: 0.02 });
+const backpackTrimMat = new THREE.MeshStandardMaterial({ color: 0x4e2c18, roughness: 0.86 });
+const backpackBuckleMat = new THREE.MeshStandardMaterial({ color: 0xe0b260, roughness: 0.42, metalness: 0.5 });
+
+function createBackpackModel(scale = 1) {
+  const bag = new THREE.Group();
+
+  const body = new THREE.Mesh(new RoundedBoxGeometry(0.38, 0.44, 0.24, 3, 0.055), backpackMat);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  bag.add(body);
+
+  const flap = new THREE.Mesh(new RoundedBoxGeometry(0.37, 0.2, 0.25, 2, 0.04), backpackTrimMat);
+  flap.position.set(0, 0.16, 0.004);
+  flap.rotation.x = -0.06;
+  flap.castShadow = true;
+  bag.add(flap);
+
+  const pocket = new THREE.Mesh(new RoundedBoxGeometry(0.22, 0.13, 0.06, 2, 0.025), backpackTrimMat);
+  pocket.position.set(0, -0.1, 0.145);
+  pocket.castShadow = true;
+  bag.add(pocket);
+
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.06, 0.035), backpackBuckleMat);
+  buckle.position.set(0, 0.09, 0.135);
+  bag.add(buckle);
+
+  for (const side of [-1, 1]) {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.41, 0.035), backpackTrimMat);
+    strap.position.set(side * 0.12, 0, -0.145);
+    strap.castShadow = true;
+    bag.add(strap);
+
+    const sidePocket = new THREE.Mesh(new RoundedBoxGeometry(0.055, 0.16, 0.15, 2, 0.02), backpackTrimMat);
+    sidePocket.position.set(side * 0.215, -0.08, 0);
+    bag.add(sidePocket);
+  }
+
+  bag.scale.setScalar(scale);
+  return bag;
+}
+
+const handBackpack = createBackpackModel(1);
+handBackpack.position.set(0.09, -0.96, 0.2);
+handBackpack.rotation.set(0.08, Math.PI - 0.25, 0.05);
+handBackpack.visible = false;
+rightArm.add(handBackpack);
+
+const AXE_BASE_Y = axe.position.y;
+const BACKPACK_BASE_Y = handBackpack.position.y;
 
 const playerGlow = new THREE.PointLight(0xffc071, 0.8, 14, 2);
 playerGlow.position.set(0, 1.9, 0);
@@ -394,9 +485,10 @@ for (let i = 0; i < 8; i += 1) {
   lowObstacles.push({ x, z, radius: 0.52 * scale, top: groundY + 0.605 * scale });
 }
 
-const droppedLogs = [];
-const droppedSaplings = [];
 const plantedSaplings = [];
+const groundItems = [];
+const carriedItems = [];
+const berryBushes = [];
 const logGeometry = new THREE.CylinderGeometry(0.15, 0.17, 0.72, 7);
 const logMaterial = new THREE.MeshStandardMaterial({
   color: 0x9a6338,
@@ -406,6 +498,76 @@ const logMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.02
 });
 
+const berryMaterial = new THREE.MeshStandardMaterial({
+  color: 0xd83a4b,
+  emissive: 0x3d0509,
+  emissiveIntensity: 0.45,
+  roughness: 0.62
+});
+const berryLeafMaterial = new THREE.MeshStandardMaterial({ color: 0x3f9a53, roughness: 0.88 });
+const berryGeometry = new THREE.SphereGeometry(0.09, 6, 5);
+const bushMaterial = new THREE.MeshStandardMaterial({ color: 0x24523a, roughness: 0.98 });
+const bushDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x183b29, roughness: 0.98 });
+
+function createBerryMesh(scale = 1) {
+  const berry = new THREE.Group();
+  const offsets = [
+    [0, 0.1, 0],
+    [0.1, 0.04, 0.03],
+    [-0.09, 0.03, 0.05],
+    [0.02, 0.02, -0.09]
+  ];
+  for (const [ox, oy, oz] of offsets) {
+    const piece = new THREE.Mesh(berryGeometry, berryMaterial);
+    piece.position.set(ox, oy, oz);
+    piece.castShadow = true;
+    berry.add(piece);
+  }
+  const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.16, 5), berryLeafMaterial);
+  leaf.position.set(0.03, 0.2, -0.02);
+  leaf.rotation.z = 0.4;
+  leaf.castShadow = true;
+  berry.add(leaf);
+  berry.scale.setScalar(scale);
+  return berry;
+}
+
+function addBerryBush(x, z) {
+  const bush = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0), bushMaterial);
+  base.position.y = 0.34;
+  base.scale.set(1.1, 0.7, 1.05);
+  base.castShadow = true;
+  base.receiveShadow = true;
+  bush.add(base);
+
+  const top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), bushDarkMaterial);
+  top.position.set(0.26, 0.54, -0.12);
+  top.scale.set(1, 0.75, 1);
+  top.castShadow = true;
+  bush.add(top);
+
+  bush.position.set(x, getGroundHeight(x, z), z);
+  bush.rotation.y = Math.random() * Math.PI * 2;
+  world.add(bush);
+  berryBushes.push({ x, z, mesh: bush });
+}
+
+for (let i = 0; i < 15; i += 1) {
+  let placed = false;
+  for (let attempt = 0; attempt < 24 && !placed; attempt += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 8.5 + Math.random() * 22;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    if (Math.hypot(x, z) < 8) continue;
+    if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 2.1)) continue;
+    if (berryBushes.some((bush) => Math.hypot(bush.x - x, bush.z - z) < 3.2)) continue;
+    addBerryBush(x, z);
+    placed = true;
+  }
+}
+
 const FIRE_FEED_RANGE = 3.8;
 const TREE_INTERACT_RANGE = 2.5;
 const FUEL_DRAIN_PER_SECOND = 0.8;
@@ -413,7 +575,6 @@ const LOG_FUEL_VALUE = 25;
 const TREE_SHAKE_TIME = 0.36;
 const TREE_FALL_TIME = 1.15;
 const SAPLING_GROW_TIME = 45;
-const SAPLING_PICKUP_RANGE = 1.15;
 const ATTACK_DURATION = 0.34;
 const FIRE_SCARE_RADIUS = 6;
 const FIRE_STRONG_FUEL = 50;
@@ -423,7 +584,19 @@ const CYCLE_LENGTH = DAY_LENGTH + NIGHT_LENGTH;
 const DUSK_LENGTH = 16;
 const DAWN_LENGTH = 14;
 const MAX_ENEMIES = 30;
+const PICKUP_RANGE = 3.35;
+const CARRY_LIMIT = 3;
+const BACKPACK_CAPACITY = 20;
+const HUNGER_DRAIN_PER_SECOND = 0.42;
+const BERRY_HUNGER = 18;
+const EQUIP_TIME = 0.3;
+const STACK_LIMIT = 20;
+const ITEM_NAMES = { wood: 'Wood log', sapling: 'Sapling', berry: 'Berry' };
+const FUEL_VALUES = { wood: LOG_FUEL_VALUE, sapling: 12, berry: 5 };
 let interactPrompt = 'INTERACT';
+let toastTimer = 0;
+let lastInventorySignature = '';
+
 
 function getCampfireDistance() {
   return Math.hypot(
@@ -453,30 +626,110 @@ function updateInteractionTarget() {
 function updateInteractPrompt() {
   let label = 'INTERACT';
   if (state.started && !state.gameOver && !state.falling) {
-    if (state.fireInReach) {
-      if (state.fuel >= 99.5) {
-        label = state.wood > 0 ? 'FIRE FULL' : 'INTERACT';
-      } else if (state.wood > 0) {
-        label = 'FEED FIRE';
-      }
-    } else if (state.targetTree) {
+    const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
+    const fuelLow = state.fuel < 99.5;
+    if (state.fireInReach && carriedItems.length > 0 && fuelLow) {
+      label = 'THROW IN FIRE';
+    } else if (nearbyItem) {
+      label = 'PICK UP';
+    } else if (carriedItems.some((item) => item.type === 'sapling')) {
+      label = 'PLANT SAPLING';
+    } else if (state.fireInReach && backpackCount() > 0) {
+      label = fuelLow ? 'FEED FIRE' : 'FIRE FULL';
+    } else if (state.equippedTool === 'axe' && state.targetTree) {
       label = 'CHOP';
+    } else if (state.fireInReach && carriedItems.length > 0) {
+      label = 'FIRE FULL';
     }
   }
 
   if (label !== interactPrompt) {
     interactPrompt = label;
     interactLabel.textContent = label;
-    interactBtn.classList.toggle('ready', label === 'FEED FIRE' || label === 'CHOP');
+    interactBtn.classList.toggle('ready', label !== 'INTERACT' && label !== 'FIRE FULL');
   }
 }
 
-function feedFire() {
-  state.wood -= 1;
-  state.fuel = clamp(state.fuel + LOG_FUEL_VALUE, 0, 100);
-  state.fireOut = false;
-  state.fireFlare = 1;
-  updateHud();
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.add('visible');
+  toastTimer = 1.5;
+}
+
+function makeGroundItemMesh(type) {
+  let mesh;
+  if (type === 'wood') {
+    mesh = new THREE.Mesh(logGeometry, logMaterial);
+    mesh.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+  } else if (type === 'sapling') {
+    mesh = createSaplingMesh(0.72);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+  } else {
+    mesh = createBerryMesh(1);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+  }
+  return mesh;
+}
+
+function spawnGroundItem(type, x, z, options = {}) {
+  const mesh = makeGroundItemMesh(type);
+  const groundY = getGroundHeight(x, z);
+  const restY = type === 'wood' ? 0.17 : type === 'berry' ? 0.14 : 0.02;
+  const baseScale = type === 'sapling' ? 0.72 : 1;
+  const startY = options.startY ?? (groundY + restY + 0.45);
+
+  mesh.position.set(x, startY, z);
+  world.add(mesh);
+
+  const item = {
+    type,
+    mesh,
+    x,
+    z,
+    groundY,
+    restY,
+    baseScale,
+    velocityY: options.velocityY ?? (type === 'wood' ? 2.2 : 2.6),
+    landed: false,
+    pickupDelay: options.pickupDelay ?? 0.35,
+    carried: false,
+    popping: 0,
+    popDuration: 0.24
+  };
+  mesh.traverse((part) => {
+    part.userData.itemRef = item;
+  });
+  groundItems.push(item);
+
+  if (groundItems.length > 80) {
+    for (let i = 0; i < groundItems.length; i += 1) {
+      const old = groundItems[i];
+      if (!old.carried && old.popping <= 0) {
+        removeGroundItem(old);
+        break;
+      }
+    }
+  }
+
+  return item;
+}
+
+function removeGroundItem(item) {
+  const itemIndex = groundItems.indexOf(item);
+  if (itemIndex >= 0) groundItems.splice(itemIndex, 1);
+  const carriedIndex = carriedItems.indexOf(item);
+  if (carriedIndex >= 0) carriedItems.splice(carriedIndex, 1);
+  world.remove(item.mesh);
+}
+
+function popGroundItem(item) {
+  if (!item || item.popping > 0) return;
+  const carriedIndex = carriedItems.indexOf(item);
+  if (carriedIndex >= 0) carriedItems.splice(carriedIndex, 1);
+  item.carried = false;
+  item.popping = item.popDuration;
 }
 
 function dropLog(tree, index = 0) {
@@ -485,31 +738,12 @@ function dropLog(tree, index = 0) {
   const baseAngle = Math.atan2(dx, dz);
   const angle = baseAngle + (index - 1) * 0.62 + (Math.random() - 0.5) * 0.32;
   const offset = tree.userData.scale * 0.35 + 0.7 + Math.random() * 0.45;
-  const x = tree.position.x + Math.sin(angle) * offset;
-  const z = tree.position.z + Math.cos(angle) * offset;
-  const groundY = getGroundHeight(x, z);
-
-  const mesh = new THREE.Mesh(logGeometry, logMaterial);
-  mesh.position.set(x, groundY + 0.55, z);
-  mesh.rotation.set(0, Math.random() * Math.PI * 2, Math.PI / 2);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  world.add(mesh);
-
-  droppedLogs.push({
-    mesh,
-    x,
-    z,
-    groundY,
-    velocityY: 2.2 + Math.random() * 0.5,
-    landed: false,
-    pickupDelay: 0.4
-  });
-
-  if (droppedLogs.length > 24) {
-    const oldest = droppedLogs.shift();
-    world.remove(oldest.mesh);
-  }
+  spawnGroundItem(
+    'wood',
+    tree.position.x + Math.sin(angle) * offset,
+    tree.position.z + Math.cos(angle) * offset,
+    { startY: tree.position.y + 0.9, velocityY: 2.2 + Math.random() * 0.5, pickupDelay: 0.4 }
+  );
 }
 
 function dropSapling(tree) {
@@ -518,29 +752,173 @@ function dropSapling(tree) {
     player.position.z - tree.position.z
   ) + (Math.random() - 0.5) * 1.2;
   const offset = tree.userData.scale * 0.3 + 0.95;
-  const x = tree.position.x + Math.sin(angle) * offset;
-  const z = tree.position.z + Math.cos(angle) * offset;
-  const groundY = getGroundHeight(x, z);
+  spawnGroundItem(
+    'sapling',
+    tree.position.x + Math.sin(angle) * offset,
+    tree.position.z + Math.cos(angle) * offset,
+    { startY: tree.position.y + 0.8, velocityY: 2.6, pickupDelay: 0.45 }
+  );
+}
 
-  const mesh = createSaplingMesh(0.72);
-  mesh.position.set(x, groundY + 0.5, z);
-  mesh.rotation.y = Math.random() * Math.PI * 2;
-  world.add(mesh);
-
-  droppedSaplings.push({
-    mesh,
-    x,
-    z,
-    groundY,
-    velocityY: 2.6,
-    landed: false,
-    pickupDelay: 0.45
-  });
-
-  if (droppedSaplings.length > 10) {
-    const oldest = droppedSaplings.shift();
-    world.remove(oldest.mesh);
+function regrowBerries() {
+  for (const bush of berryBushes) {
+    const existing = groundItems.filter((item) => (
+      item.type === 'berry'
+      && !item.carried
+      && item.popping <= 0
+      && Math.hypot(item.x - bush.x, item.z - bush.z) < 2.1
+    )).length;
+    for (let i = existing; i < 3; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 0.35 + Math.random() * 0.45;
+      const x = bush.x + Math.cos(angle) * radius;
+      const z = bush.z + Math.sin(angle) * radius;
+      spawnGroundItem('berry', x, z, {
+        startY: getGroundHeight(x, z) + 0.55,
+        velocityY: 1.8,
+        pickupDelay: 0.6
+      });
+    }
   }
+}
+
+function resetGroundItems() {
+  for (const item of groundItems) world.remove(item.mesh);
+  groundItems.length = 0;
+  carriedItems.length = 0;
+  regrowBerries();
+}
+
+function findNearestGroundItem(range, filter = null) {
+  let closest = range * range;
+  let found = null;
+  for (const item of groundItems) {
+    if (item.carried || item.popping > 0) continue;
+    if (filter && !filter(item)) continue;
+    const dx = player.position.x - item.x;
+    const dz = player.position.z - item.z;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq < closest) {
+      closest = distanceSq;
+      found = item;
+    }
+  }
+  return found;
+}
+
+function backpackCount() {
+  return state.backpack.wood + state.backpack.sapling + state.backpack.berry;
+}
+
+function ownedCount(type) {
+  return state.backpack[type] + carriedItems.filter((item) => item.type === type).length;
+}
+
+function isBackpackEquipped() {
+  return state.equippedTool === 'backpack';
+}
+
+function addItemToBackpack(item) {
+  if (!item || item.popping > 0) return false;
+  if (backpackCount() >= BACKPACK_CAPACITY) {
+    showToast('Backpack is full');
+    return false;
+  }
+  state.backpack[item.type] += 1;
+  popGroundItem(item);
+  updateHud();
+  backpackSlot.classList.remove('pop');
+  void backpackSlot.offsetWidth;
+  backpackSlot.classList.add('pop');
+  showToast(`+1 ${ITEM_NAMES[item.type]}`);
+  return true;
+}
+
+function pickUpItem(item) {
+  if (!item || item.carried || item.popping > 0) return false;
+  if (isBackpackEquipped()) {
+    return addItemToBackpack(item);
+  }
+  if (carriedItems.length >= CARRY_LIMIT) {
+    showToast('Hands full - 3 items max');
+    return false;
+  }
+  item.carried = true;
+  item.landed = true;
+  item.pickupDelay = 0;
+  carriedItems.push(item);
+  updateHud();
+  showToast(`Picked up ${ITEM_NAMES[item.type]}`);
+  return true;
+}
+
+function dropCarriedItems() {
+  if (!state.started || state.gameOver || state.falling || state.dropCooldown > 0) return;
+
+  if (carriedItems.length > 0) {
+    const items = carriedItems.splice(0, carriedItems.length);
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      item.carried = false;
+      const angle = player.rotation.y + (i - (items.length - 1) / 2) * 0.5;
+      const distance = 1.15 + i * 0.15;
+      const x = player.position.x + Math.sin(angle) * distance;
+      const z = player.position.z + Math.cos(angle) * distance;
+      item.x = x;
+      item.z = z;
+      item.groundY = getGroundHeight(x, z);
+      item.velocityY = 1.3;
+      item.landed = false;
+      item.pickupDelay = 0.3;
+      item.mesh.position.set(x, player.position.y + 0.8, z);
+    }
+    state.dropCooldown = 0.35;
+    updateHud();
+    showToast(items.length === 1 ? 'Dropped item' : `Dropped ${items.length} items`);
+    return;
+  }
+
+  const type = ['wood', 'sapling', 'berry'].find((candidate) => state.backpack[candidate] > 0);
+  if (!type) {
+    showToast('Nothing to drop');
+    return;
+  }
+
+  state.backpack[type] -= 1;
+  const x = player.position.x + Math.sin(player.rotation.y) * 1.35;
+  const z = player.position.z + Math.cos(player.rotation.y) * 1.35;
+  spawnGroundItem(type, x, z, { velocityY: 2.2, pickupDelay: 0.35 });
+  state.dropCooldown = 0.35;
+  updateHud();
+  showToast(`Took out ${ITEM_NAMES[type].toLowerCase()}`);
+}
+
+function throwCarriedIntoFire() {
+  if (carriedItems.length === 0) return;
+  const items = carriedItems.slice();
+  let fuel = 0;
+  for (const item of items) {
+    fuel += FUEL_VALUES[item.type] || 5;
+    popGroundItem(item);
+  }
+  state.fuel = clamp(state.fuel + fuel, 0, 100);
+  state.fireOut = false;
+  state.fireFlare = 1;
+  state.interactCooldown = 0.45;
+  updateHud();
+  showToast(`Fire +${Math.round(fuel)}%`);
+}
+
+function feedFireFromBackpack() {
+  const type = ['wood', 'sapling', 'berry'].find((candidate) => state.backpack[candidate] > 0);
+  if (!type) return;
+  state.backpack[type] -= 1;
+  state.fuel = clamp(state.fuel + (FUEL_VALUES[type] || 5), 0, 100);
+  state.fireOut = false;
+  state.fireFlare = 1;
+  state.interactCooldown = 0.4;
+  updateHud();
+  showToast(`Fed the fire with ${ITEM_NAMES[type].toLowerCase()}`);
 }
 
 function fellTree(tree) {
@@ -577,78 +955,90 @@ function chopTree(tree) {
 function interact() {
   if (!state.started || state.gameOver || state.falling || state.interactCooldown > 0) return;
 
-  if (state.fireInReach && state.wood > 0 && state.fuel < 99.5) {
-    feedFire();
-    state.interactCooldown = 0.4;
+  if (state.fireInReach && carriedItems.length > 0 && state.fuel < 99.5) {
+    throwCarriedIntoFire();
     return;
   }
 
-  if (state.targetTree) {
+  const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
+  if (nearbyItem) {
+    if (pickUpItem(nearbyItem)) state.interactCooldown = 0.32;
+    return;
+  }
+
+  if (carriedItems.some((item) => item.type === 'sapling')) {
+    plantSapling();
+    return;
+  }
+
+  if (state.fireInReach && backpackCount() > 0 && state.fuel < 99.5) {
+    feedFireFromBackpack();
+    return;
+  }
+
+  if (state.equippedTool === 'axe' && state.targetTree) {
     chopTree(state.targetTree);
+    return;
+  }
+
+  if (state.fireInReach && state.fuel >= 99.5 && (carriedItems.length > 0 || backpackCount() > 0)) {
+    showToast('The fire is already full');
   }
 }
 
-function updateDroppedLogs(delta) {
-  for (let i = droppedLogs.length - 1; i >= 0; i -= 1) {
-    const log = droppedLogs[i];
-    log.pickupDelay = Math.max(0, log.pickupDelay - delta);
+function updateGroundItems(delta) {
+  const now = performance.now();
 
-    if (!log.landed) {
-      log.velocityY -= 13 * delta;
-      log.mesh.position.y += log.velocityY * delta;
-      log.mesh.rotation.y += delta * 3.2;
-      const restY = log.groundY + 0.17;
-      if (log.mesh.position.y <= restY) {
-        log.mesh.position.y = restY;
-        log.landed = true;
+  for (let i = groundItems.length - 1; i >= 0; i -= 1) {
+    const item = groundItems[i];
+
+    if (item.popping > 0) {
+      item.popping = Math.max(0, item.popping - delta);
+      const progress = 1 - item.popping / item.popDuration;
+      item.mesh.scale.setScalar(item.baseScale * (1 + progress * 1.1));
+      item.mesh.position.y += delta * 1.35;
+      if (item.popping <= 0) removeGroundItem(item);
+      continue;
+    }
+
+    if (item.carried) {
+      const index = carriedItems.indexOf(item);
+      const spread = (index - (carriedItems.length - 1) / 2) * 0.62;
+      const angle = player.rotation.y + Math.PI + spread + Math.sin(now * 0.0012) * 0.05;
+      const distance = 0.78;
+      const targetX = player.position.x + Math.sin(angle) * distance;
+      const targetZ = player.position.z + Math.cos(angle) * distance;
+      const targetY = player.position.y + 1.62 + index * 0.16
+        + Math.sin(now * 0.003 + index) * 0.05;
+      const damping = 1 - Math.exp(-8 * delta);
+      item.mesh.position.x += (targetX - item.mesh.position.x) * damping;
+      item.mesh.position.y += (targetY - item.mesh.position.y) * damping;
+      item.mesh.position.z += (targetZ - item.mesh.position.z) * damping;
+      item.mesh.rotation.y += delta * 1.25;
+      continue;
+    }
+
+    item.pickupDelay = Math.max(0, item.pickupDelay - delta);
+
+    if (!item.landed) {
+      item.velocityY -= 13 * delta;
+      item.mesh.position.y += item.velocityY * delta;
+      if (item.type === 'wood') item.mesh.rotation.y += delta * 3.2;
+      if (item.type === 'sapling') item.mesh.rotation.y += delta * 2.4;
+      const restY = item.groundY + item.restY;
+      if (item.mesh.position.y <= restY) {
+        item.mesh.position.y = restY;
+        item.landed = true;
       }
     } else {
-      log.mesh.position.y = log.groundY + 0.17 + Math.sin(performance.now() * 0.003 + log.mesh.id) * 0.018;
-    }
-
-    if (!state.started || state.gameOver || state.falling || log.pickupDelay > 0) continue;
-    const dx = player.position.x - log.x;
-    const dz = player.position.z - log.z;
-    if (dx * dx + dz * dz < 1.15 * 1.15) {
-      state.wood += 1;
-      world.remove(log.mesh);
-      droppedLogs.splice(i, 1);
-      updateHud();
+      item.mesh.position.y = item.groundY + item.restY
+        + Math.abs(Math.sin(now * 0.0028 + item.mesh.id)) * (item.type === 'berry' ? 0.025 : 0.018);
+      if (item.type === 'sapling') item.mesh.rotation.y += delta * 0.4;
+      if (item.type === 'berry') item.mesh.rotation.y += delta * 0.35;
     }
   }
 }
 
-function updateDroppedSaplings(delta) {
-  for (let i = droppedSaplings.length - 1; i >= 0; i -= 1) {
-    const sapling = droppedSaplings[i];
-    sapling.pickupDelay = Math.max(0, sapling.pickupDelay - delta);
-
-    if (!sapling.landed) {
-      sapling.velocityY -= 12 * delta;
-      sapling.mesh.position.y += sapling.velocityY * delta;
-      sapling.mesh.rotation.y += delta * 2.4;
-      const restY = sapling.groundY + 0.02;
-      if (sapling.mesh.position.y <= restY) {
-        sapling.mesh.position.y = restY;
-        sapling.landed = true;
-      }
-    } else {
-      sapling.mesh.position.y = sapling.groundY + 0.02
-        + Math.abs(Math.sin(performance.now() * 0.0025 + sapling.mesh.id)) * 0.06;
-      sapling.mesh.rotation.y += delta * 0.5;
-    }
-
-    if (!state.started || state.gameOver || state.falling || sapling.pickupDelay > 0) continue;
-    const dx = player.position.x - sapling.x;
-    const dz = player.position.z - sapling.z;
-    if (dx * dx + dz * dz < SAPLING_PICKUP_RANGE * SAPLING_PICKUP_RANGE) {
-      state.saplings += 1;
-      world.remove(sapling.mesh);
-      droppedSaplings.splice(i, 1);
-      updateHud();
-    }
-  }
-}
 
 function markChoppable(tree) {
   const data = tree.userData;
@@ -669,15 +1059,23 @@ function markChoppable(tree) {
 }
 
 function plantSapling() {
-  if (!state.started || state.gameOver || state.falling || state.saplings <= 0) return;
-  if (state.plantCooldown > 0) return;
+  if (!state.started || state.gameOver || state.falling || state.plantCooldown > 0) return;
+  const carriedIndex = carriedItems.findIndex((item) => item.type === 'sapling');
+  if (carriedIndex < 0) {
+    showToast('Carry a sapling to plant it');
+    return;
+  }
 
   const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
   const x = player.position.x + forward.x * 1.75;
   const z = player.position.z + forward.z * 1.75;
-  if (Math.hypot(x - campfire.position.x, z - campfire.position.z) < 1.6) return;
+  if (Math.hypot(x - campfire.position.x, z - campfire.position.z) < 1.6) {
+    showToast('Too close to the campfire');
+    return;
+  }
 
-  state.saplings -= 1;
+  const item = carriedItems[carriedIndex];
+  removeGroundItem(item);
   state.plantCooldown = 0.45;
   const mesh = createSaplingMesh(0.35);
   mesh.position.set(x, getGroundHeight(x, z), z);
@@ -691,6 +1089,7 @@ function plantSapling() {
     sway: Math.random() * Math.PI * 2
   });
   updateHud();
+  showToast('Planted a sapling');
 }
 
 function updatePlantedSaplings(delta) {
@@ -990,6 +1389,7 @@ const state = {
   night: 1,
   maxNight: 99,
   health: 100,
+  hunger: 100,
   damageFlash: 0,
   attackCooldown: 0,
   attackTimer: 0,
@@ -1013,8 +1413,14 @@ const state = {
   walkPhase: 0,
   idleTime: 0,
   moveSpeed: 0,
-  wood: 0,
-  saplings: 0,
+  backpack: { wood: 0, sapling: 0, berry: 0 },
+  equippedTool: null,
+  equipTimer: 0,
+  inventoryOpen: false,
+  dropCooldown: 0,
+  starveTimer: 0,
+  portrait: false,
+  paused: false,
   fuel: 100,
   fireOut: false,
   fireFlare: 0,
@@ -1039,14 +1445,20 @@ function smoothstep(value) {
 
 function updateHud() {
   nightText.textContent = `${state.night} / ${state.maxNight}`;
-  woodText.textContent = String(state.wood);
-  saplingText.textContent = String(state.saplings);
+  woodText.textContent = String(ownedCount('wood'));
+  saplingText.textContent = String(ownedCount('sapling'));
+  berryText.textContent = String(ownedCount('berry'));
   healthText.textContent = String(Math.max(0, Math.ceil(state.health)));
+  hungerText.textContent = String(Math.max(0, Math.ceil(state.hunger)));
 
   const healthPercent = clamp(state.health, 0, 100);
   healthFill.style.width = `${healthPercent}%`;
   healthFill.classList.toggle('low', healthPercent <= 55 && healthPercent > 25);
   healthFill.classList.toggle('critical', healthPercent <= 25);
+
+  const hungerPercent = clamp(state.hunger, 0, 100);
+  hungerFill.style.width = `${hungerPercent}%`;
+  hungerFill.classList.toggle('low', hungerPercent <= 30);
 
   const fuel = clamp(state.fuel, 0, 100);
   const fuelPercent = Math.round(fuel);
@@ -1071,6 +1483,180 @@ function updateHud() {
 
   const fireIsOut = state.started && state.fireOut;
   fireWarning.classList.toggle('visible', fireIsOut);
+
+  backpackBadge.textContent = `${backpackCount()}/${BACKPACK_CAPACITY}`;
+  inventoryCapacity.textContent = `${backpackCount()} / ${BACKPACK_CAPACITY}`;
+  updateToolUi();
+  renderInventory();
+}
+
+function updateToolUi() {
+  const axeEquipped = state.equippedTool === 'axe';
+  const backpackEquipped = state.equippedTool === 'backpack';
+  axeSlot.classList.toggle('equipped', axeEquipped);
+  backpackSlot.classList.toggle('equipped', backpackEquipped);
+  axeSlot.setAttribute('aria-pressed', String(axeEquipped));
+  backpackSlot.setAttribute('aria-pressed', String(backpackEquipped));
+
+  const showAttack = axeEquipped && state.started && !state.gameOver && !state.falling;
+  attackBtn.classList.toggle('visible', showAttack);
+  if (state.targetTree && axeEquipped) {
+    attackLabel.textContent = 'CHOP';
+  } else {
+    attackLabel.textContent = 'ATTACK';
+  }
+}
+
+function renderInventory() {
+  if (!state.inventoryOpen) return;
+  const signature = `${state.backpack.wood}|${state.backpack.sapling}|${state.backpack.berry}`;
+  if (signature === lastInventorySignature) return;
+  lastInventorySignature = signature;
+
+  inventoryList.innerHTML = '';
+  const entries = [
+    ['wood', 'Wood log'],
+    ['sapling', 'Sapling'],
+    ['berry', 'Berry']
+  ];
+  let hasItems = false;
+
+  for (const [type, name] of entries) {
+    const count = state.backpack[type];
+    if (count <= 0) continue;
+    hasItems = true;
+
+    const row = document.createElement('div');
+    row.className = 'inventory-row';
+
+    const icon = document.createElement('span');
+    icon.className = `inv-icon ${type}`;
+
+    const label = document.createElement('span');
+    label.className = 'inv-name';
+    label.textContent = name;
+
+    const amount = document.createElement('span');
+    amount.className = 'inv-count';
+    amount.textContent = `×${count}`;
+
+    const take = document.createElement('button');
+    take.className = 'inv-btn take';
+    take.textContent = 'TAKE';
+    take.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      takeOutItem(type);
+    });
+
+    row.append(icon, label, amount, take);
+
+    if (type === 'berry') {
+      const eat = document.createElement('button');
+      eat.className = 'inv-btn eat';
+      eat.textContent = 'EAT';
+      eat.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        eatBackpackBerry();
+      });
+      row.append(eat);
+    }
+
+    inventoryList.appendChild(row);
+  }
+
+  if (!hasItems) {
+    const empty = document.createElement('div');
+    empty.className = 'inventory-empty';
+    empty.textContent = 'Your backpack is empty.';
+    inventoryList.appendChild(empty);
+  }
+}
+
+function setInventoryOpen(open) {
+  state.inventoryOpen = open;
+  inventoryPanel.classList.toggle('hidden', !open);
+  if (open) {
+    toastTimer = 0;
+    toastEl.classList.remove('visible');
+    lastInventorySignature = '';
+    renderInventory();
+  }
+}
+
+function takeOutItem(type) {
+  if (!state.started || state.gameOver || state.falling) return;
+  if (state.backpack[type] <= 0) return;
+  state.backpack[type] -= 1;
+  const x = player.position.x + Math.sin(player.rotation.y) * 1.35;
+  const z = player.position.z + Math.cos(player.rotation.y) * 1.35;
+  spawnGroundItem(type, x, z, { velocityY: 2.2, pickupDelay: 0.3 });
+  state.dropCooldown = 0.25;
+  updateHud();
+  showToast(`Took out ${ITEM_NAMES[type].toLowerCase()}`);
+}
+
+function eatBackpackBerry() {
+  if (!state.started || state.gameOver || state.falling) return;
+  if (state.backpack.berry <= 0) return;
+  state.backpack.berry -= 1;
+  state.hunger = clamp(state.hunger + BERRY_HUNGER, 0, 100);
+  updateHud();
+  showToast(`Ate a berry (+${BERRY_HUNGER} hunger)`);
+}
+
+function equipTool(tool) {
+  if (!state.started || state.gameOver || state.falling) return;
+
+  if (tool === 'backpack' && state.equippedTool === 'backpack') {
+    setInventoryOpen(!state.inventoryOpen);
+    return;
+  }
+
+  if (tool === state.equippedTool) {
+    state.equippedTool = null;
+  } else {
+    state.equippedTool = tool;
+  }
+
+  if (state.equippedTool !== 'backpack') setInventoryOpen(false);
+  state.equipTimer = state.equippedTool ? EQUIP_TIME : 0;
+  updateHud();
+  updateToolModels();
+}
+
+function unequipTool() {
+  state.equippedTool = null;
+  state.equipTimer = 0;
+  setInventoryOpen(false);
+  updateHud();
+  updateToolModels();
+}
+
+function updateToolModels() {
+  const axeEquipped = state.equippedTool === 'axe';
+  const backpackEquipped = state.equippedTool === 'backpack';
+  axe.visible = axeEquipped;
+  handBackpack.visible = backpackEquipped;
+  lantern.visible = !state.equippedTool;
+}
+
+function updateEquippedTool(delta) {
+  state.equipTimer = Math.max(0, state.equipTimer - delta);
+  const tool = state.equippedTool === 'axe' ? axe : state.equippedTool === 'backpack' ? handBackpack : null;
+  if (!tool) return;
+
+  if (state.equipTimer > 0) {
+    const progress = 1 - state.equipTimer / EQUIP_TIME;
+    const eased = 1 - (1 - progress) * (1 - progress);
+    const baseY = tool === axe ? AXE_BASE_Y : BACKPACK_BASE_Y;
+    tool.scale.setScalar(0.55 + eased * 0.45);
+    tool.position.y = baseY - (1 - eased) * 0.26;
+  } else {
+    tool.scale.setScalar(tool === axe ? 1 : 0.92);
+    tool.position.y = tool === axe ? AXE_BASE_Y : BACKPACK_BASE_Y;
+  }
 }
 
 function resetJoystickVisual() {
@@ -1134,7 +1720,7 @@ function getPinchDistance() {
 }
 
 lookZone.addEventListener('pointerdown', (event) => {
-  if (!state.started) return;
+  if (!state.started || state.inventoryOpen) return;
   event.preventDefault();
   lookPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   state.look.active = true;
@@ -1143,7 +1729,7 @@ lookZone.addEventListener('pointerdown', (event) => {
 });
 
 lookZone.addEventListener('pointermove', (event) => {
-  if (!state.started) return;
+  if (!state.started || state.inventoryOpen) return;
   const previous = lookPointers.get(event.pointerId);
   if (!previous) return;
   event.preventDefault();
@@ -1173,12 +1759,40 @@ function releaseLookPointer(event) {
 lookZone.addEventListener('pointerup', releaseLookPointer);
 lookZone.addEventListener('pointercancel', releaseLookPointer);
 
+function isPortraitViewport() {
+  return window.innerHeight > window.innerWidth;
+}
+
+async function requestLandscape() {
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  if (!coarsePointer) return;
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (error) {
+    // Fullscreen can be blocked by the browser; the rotate overlay still works.
+  }
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+    }
+  } catch (error) {
+    // Orientation lock is best-effort on browsers that do not support it.
+  }
+}
+
 function startGame() {
+  if (isPortraitViewport()) return;
+  requestLandscape();
+
   state.started = true;
   state.victory = false;
   state.gameOver = false;
+  state.paused = false;
   overlay.classList.add('hidden');
   state.health = 100;
+  state.hunger = 100;
   state.night = 1;
   state.cycleTime = 0;
   state.daylight = 1;
@@ -1197,8 +1811,14 @@ function startGame() {
   state.walkPhase = 0;
   state.idleTime = 0;
   state.moveSpeed = 0;
-  state.wood = 0;
-  state.saplings = 0;
+  state.backpack.wood = 0;
+  state.backpack.sapling = 0;
+  state.backpack.berry = 0;
+  state.equippedTool = null;
+  state.equipTimer = 0;
+  state.inventoryOpen = false;
+  state.dropCooldown = 0;
+  state.starveTimer = 0;
   state.fuel = 100;
   state.fireOut = false;
   state.fireFlare = 0;
@@ -1209,6 +1829,9 @@ function startGame() {
   state.falling = 0;
   state.invuln = 0;
   state.hitEffectTimer = 0;
+  toastTimer = 0;
+  toastEl.classList.remove('visible');
+  setInventoryOpen(false);
   player.position.set(0, getGroundHeight(0, -3.5), -3.5);
   player.rotation.y = 0;
   leftArm.rotation.set(0, 0, 0);
@@ -1220,12 +1843,9 @@ function startGame() {
   state.look.active = false;
   state.pinchDistance = 0;
 
-  for (const log of droppedLogs) world.remove(log.mesh);
-  droppedLogs.length = 0;
-  for (const sapling of droppedSaplings) world.remove(sapling.mesh);
-  droppedSaplings.length = 0;
   for (const sapling of plantedSaplings) world.remove(sapling.mesh);
   plantedSaplings.length = 0;
+  resetGroundItems();
 
   for (let i = treeData.length - 1; i >= 0; i -= 1) {
     const tree = treeData[i];
@@ -1253,14 +1873,9 @@ function startGame() {
   }
   strikeArc.visible = false;
   hitEffect.visible = false;
+  updateToolModels();
   updateHud();
-  updatePlantButton();
-}
-
-function updatePlantButton() {
-  const available = state.started && !state.gameOver && !state.falling && state.saplings > 0;
-  plantBtn.classList.toggle('visible', available);
-  plantBtn.classList.toggle('ready', available);
+  showToast('Tap a hotbar slot to equip a tool');
 }
 
 startBtn.addEventListener('click', startGame);
@@ -1273,6 +1888,9 @@ window.addEventListener('keydown', (event) => {
   if (key === ' ' && !event.repeat) attack();
   if (key === 'e' && !event.repeat) interact();
   if (key === 'q' && !event.repeat) plantSapling();
+  if (key === 'f' && !event.repeat) dropCarriedItems();
+  if (key === '1' && !event.repeat) equipTool('axe');
+  if (key === '2' && !event.repeat) equipTool('backpack');
   if (jumpKeys.has(key)) {
     state.jumpHeld = true;
     if (!event.repeat) tryJump();
@@ -1299,10 +1917,86 @@ interactBtn.addEventListener('pointerdown', (event) => {
   interact();
 });
 
-plantBtn.addEventListener('pointerdown', (event) => {
+dropBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  plantSapling();
+  dropCarriedItems();
 });
+
+axeSlot.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  equipTool('axe');
+});
+
+backpackSlot.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  equipTool('backpack');
+});
+
+closeInventoryBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  setInventoryOpen(false);
+});
+
+unequipBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  unequipTool();
+});
+
+// Tapping a world item picks it up. Track short taps so camera drags are ignored.
+let worldTap = null;
+window.addEventListener('pointerdown', (event) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  if (event.target.closest('button, #inventoryPanel, #startOverlay, #rotateOverlay')) return;
+  if (event.target.closest('#joystickZone, #hotbar, #actionCluster')) return;
+  worldTap = {
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    time: performance.now()
+  };
+});
+
+window.addEventListener('pointerup', (event) => {
+  if (!worldTap || worldTap.id !== event.pointerId) return;
+  const tap = worldTap;
+  worldTap = null;
+  if (!state.started || state.gameOver || state.falling || state.inventoryOpen || state.portrait) return;
+  const moved = Math.hypot(event.clientX - tap.x, event.clientY - tap.y);
+  if (moved > 12 || performance.now() - tap.time > 420) return;
+  handleWorldTap(event.clientX, event.clientY);
+});
+
+const tapRaycaster = new THREE.Raycaster();
+const tapPointer = new THREE.Vector2();
+
+function handleWorldTap(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  tapPointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  tapPointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  tapRaycaster.setFromCamera(tapPointer, camera);
+
+  const candidates = [];
+  for (const item of groundItems) {
+    if (item.carried || item.popping > 0) continue;
+    const dx = player.position.x - item.x;
+    const dz = player.position.z - item.z;
+    if (dx * dx + dz * dz > (PICKUP_RANGE + 0.6) * (PICKUP_RANGE + 0.6)) continue;
+    candidates.push(item.mesh);
+  }
+  if (candidates.length === 0) return;
+
+  const hits = tapRaycaster.intersectObjects(candidates, true);
+  if (hits.length === 0) return;
+
+  let object = hits[0].object;
+  while (object) {
+    if (object.userData.itemRef) {
+      pickUpItem(object.userData.itemRef);
+      return;
+    }
+    object = object.parent;
+  }
+}
 
 function setJumpHeld(held) {
   state.jumpHeld = held;
@@ -1330,18 +2024,31 @@ function resetToMenu(title, subtitle, hint, buttonText) {
   overlay.querySelector('button').textContent = buttonText;
   fireWarning.classList.remove('visible');
   deathBanner.classList.remove('visible');
-  plantBtn.classList.remove('visible');
+  toastEl.classList.remove('visible');
+  setInventoryOpen(false);
+  state.equippedTool = null;
+  state.equipTimer = 0;
+  updateToolModels();
+  updateHud();
   darkness.style.opacity = '0';
 }
 
 function attack() {
   if (!state.started || state.gameOver || state.falling || state.attackCooldown > 0) return;
+  if (state.equippedTool !== 'axe') {
+    showToast('Equip the axe to attack');
+    return;
+  }
 
   state.attackCooldown = 0.58;
   state.attackTimer = ATTACK_DURATION;
   strikeArc.visible = true;
   strikeArc.scale.setScalar(0.7);
   playerGlow.intensity = 1.8;
+
+  if (state.targetTree) {
+    chopTree(state.targetTree);
+  }
 
   const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
   for (const enemy of enemies) {
@@ -1400,6 +2107,7 @@ function beginFalling() {
   state.health = 0;
   state.attackTimer = 0;
   strikeArc.visible = false;
+  setInventoryOpen(false);
   deathBanner.classList.add('visible');
   updateHud();
 }
@@ -1407,6 +2115,7 @@ function beginFalling() {
 function respawnAtCamp() {
   state.falling = 0;
   state.health = 100;
+  state.hunger = Math.max(state.hunger, 55);
   state.invuln = 2;
   state.damageFlash = 0;
   state.velocityY = 0;
@@ -1608,6 +2317,12 @@ function updateAvatar(delta) {
     leftArmX = -0.4 * swing;
     rightArmX = -2.2 * swing;
     rightArmZ = 0.12 * swing;
+  } else if (state.equipTimer > 0) {
+    const progress = 1 - state.equipTimer / EQUIP_TIME;
+    const lift = Math.sin(clamp(progress, 0, 1) * Math.PI);
+    rightArmX = -1.15 * lift;
+    rightArmZ = 0.22 * lift;
+    leftArmX = 0.18 * lift;
   } else if (state.moveSpeed > 0.1) {
     state.walkPhase += delta * (5 + state.moveSpeed);
     const swing = Math.sin(state.walkPhase) * 0.72;
@@ -1769,6 +2484,24 @@ function updateEnemies(delta) {
   }
 }
 
+function updateVitals(delta) {
+  if (!state.started || state.gameOver || state.falling) return;
+
+  state.hunger = Math.max(0, state.hunger - delta * HUNGER_DRAIN_PER_SECOND);
+  if (state.hunger <= 0) {
+    state.starveTimer += delta;
+    if (state.starveTimer >= 1) {
+      state.starveTimer -= 1;
+      state.health = Math.max(0, state.health - 2);
+      state.damageFlash = Math.max(state.damageFlash, 0.45);
+      updateHud();
+      if (state.health <= 0) beginFalling();
+    }
+  } else {
+    state.starveTimer = 0;
+  }
+}
+
 function updateCampfire(delta) {
   if (state.started && !state.gameOver) {
     state.fuel = Math.max(0, state.fuel - delta * FUEL_DRAIN_PER_SECOND);
@@ -1907,6 +2640,7 @@ function updateDayNight(delta) {
 
   if (wrapped) {
     state.nightActive = false;
+    regrowBerries();
     if (state.night >= state.maxNight) {
       state.victory = true;
       state.started = false;
@@ -1979,71 +2713,94 @@ function updateCamera() {
 
 function animate() {
   requestAnimationFrame(animate);
-  const delta = Math.min(clock.getDelta(), 0.033);
+  const rawDelta = clock.getDelta();
+  const delta = Math.min(rawDelta, 0.033);
 
-  state.attackCooldown = Math.max(0, state.attackCooldown - delta);
-  state.attackTimer = Math.max(0, state.attackTimer - delta);
-  state.interactCooldown = Math.max(0, state.interactCooldown - delta);
-  state.chopTimer = Math.max(0, state.chopTimer - delta);
-  state.plantCooldown = Math.max(0, state.plantCooldown - delta);
-  state.invuln = Math.max(0, state.invuln - delta);
-
-  strikeArc.visible = state.attackTimer > 0;
-  if (state.attackTimer > 0) {
-    const progress = 1 - state.attackTimer / ATTACK_DURATION;
-    strikeArc.scale.setScalar(0.7 + progress * 0.6);
-    strikeArc.material.opacity = 0.8 * (1 - progress);
-    strikeArc.rotation.z = progress * 0.55;
-  }
-
-  if (state.hitEffectTimer > 0) {
-    state.hitEffectTimer = Math.max(0, state.hitEffectTimer - delta);
-    hitEffect.visible = true;
-    hitEffect.scale.setScalar(0.8 + (1 - state.hitEffectTimer / 0.22) * 1.5);
-    hitEffect.material.opacity = state.hitEffectTimer / 0.22;
-    hitEffect.rotation.y += delta * 10;
-  } else {
-    hitEffect.visible = false;
-  }
-
-  if (state.started && !state.gameOver) {
-    updateDayNight(delta);
-    if (state.falling > 0) {
-      state.falling = Math.max(0, state.falling - delta);
-      if (state.falling <= 0) respawnAtCamp();
-    } else {
-      movePlayer(delta);
+  const portrait = isPortraitViewport();
+  if (portrait !== state.portrait) {
+    state.portrait = portrait;
+    document.body.classList.toggle('portrait', portrait);
+    if (portrait) {
+      releaseJoystick();
+      lookPointers.clear();
+      state.look.active = false;
+      state.pinchDistance = 0;
+      state.keys.clear();
+      state.jumpHeld = false;
     }
-    updatePlayerVertical(delta);
-    updateEnemies(delta);
-    updateInteractionTarget();
-    updateTrees(delta);
-    updateDroppedLogs(delta);
-    updateDroppedSaplings(delta);
-    updatePlantedSaplings(delta);
-    updateCampfire(delta);
-    updateHud();
-    updateInteractPrompt();
-    updatePlantButton();
-  } else {
-    state.moveSpeed = 0;
-    updatePlayerVertical(delta);
-    updateInteractionTarget();
-    updateTrees(delta);
-    updateDroppedLogs(delta);
-    updateDroppedSaplings(delta);
-    updateInteractPrompt();
-    updatePlantButton();
   }
+  state.paused = portrait;
 
-  updateAvatar(delta);
+  if (!portrait) {
+    state.attackCooldown = Math.max(0, state.attackCooldown - delta);
+    state.attackTimer = Math.max(0, state.attackTimer - delta);
+    state.interactCooldown = Math.max(0, state.interactCooldown - delta);
+    state.chopTimer = Math.max(0, state.chopTimer - delta);
+    state.plantCooldown = Math.max(0, state.plantCooldown - delta);
+    state.dropCooldown = Math.max(0, state.dropCooldown - delta);
+    state.invuln = Math.max(0, state.invuln - delta);
+    updateEquippedTool(delta);
+
+    strikeArc.visible = state.attackTimer > 0;
+    if (state.attackTimer > 0) {
+      const progress = 1 - state.attackTimer / ATTACK_DURATION;
+      strikeArc.scale.setScalar(0.7 + progress * 0.6);
+      strikeArc.material.opacity = 0.8 * (1 - progress);
+      strikeArc.rotation.z = progress * 0.55;
+    }
+
+    if (state.hitEffectTimer > 0) {
+      state.hitEffectTimer = Math.max(0, state.hitEffectTimer - delta);
+      hitEffect.visible = true;
+      hitEffect.scale.setScalar(0.8 + (1 - state.hitEffectTimer / 0.22) * 1.5);
+      hitEffect.material.opacity = state.hitEffectTimer / 0.22;
+      hitEffect.rotation.y += delta * 10;
+    } else {
+      hitEffect.visible = false;
+    }
+
+    if (toastTimer > 0) {
+      toastTimer = Math.max(0, toastTimer - rawDelta);
+      if (toastTimer <= 0) toastEl.classList.remove('visible');
+    }
+
+    if (state.started && !state.gameOver) {
+      updateDayNight(delta);
+      if (state.falling > 0) {
+        state.falling = Math.max(0, state.falling - delta);
+        if (state.falling <= 0) respawnAtCamp();
+      } else {
+        movePlayer(delta);
+      }
+      updatePlayerVertical(delta);
+      updateEnemies(delta);
+      updateVitals(delta);
+      updateInteractionTarget();
+      updateTrees(delta);
+      updateGroundItems(delta);
+      updatePlantedSaplings(delta);
+      updateCampfire(delta);
+      updateHud();
+      updateInteractPrompt();
+    } else {
+      state.moveSpeed = 0;
+      updatePlayerVertical(delta);
+      updateInteractionTarget();
+      updateTrees(delta);
+      updateGroundItems(delta);
+      updateInteractPrompt();
+      updateHud();
+    }
+
+    updateAvatar(delta);
+
+    if (state.damageFlash > 0) {
+      state.damageFlash = Math.max(0, state.damageFlash - delta * 1.5);
+    }
+  }
 
   if (state.victory && !state.started) {
     overlay.classList.remove('hidden');
-  }
-
-  if (state.damageFlash > 0) {
-    state.damageFlash = Math.max(0, state.damageFlash - delta * 1.5);
   }
 
   applyDayNightVisuals();
@@ -2057,6 +2814,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+regrowBerries();
 updateHud();
 applyDayNightVisuals();
 if (import.meta.env.DEV) {
@@ -2065,16 +2823,44 @@ if (import.meta.env.DEV) {
     enemies,
     player,
     campfire,
+    camera,
+    canvas,
+    axe,
+    handBackpack,
+    lantern,
     treeData,
-    droppedLogs,
-    droppedSaplings,
+    groundItems,
+    carriedItems,
+    berryBushes,
     plantedSaplings,
+    spawnGroundItem,
+    resetGroundItems,
+    removeGroundItem,
+    popGroundItem,
+    findNearestGroundItem,
     spawnNightWave,
     startEnemyFade,
     plantSapling,
     interact,
     attack,
-    getGroundHeight
+    dropCarriedItems,
+    pickUpItem,
+    addItemToBackpack,
+    equipTool,
+    unequipTool,
+    setInventoryOpen,
+    takeOutItem,
+    eatBackpackBerry,
+    updateHud,
+    updateToolModels,
+    handleWorldTap,
+    isPortraitViewport,
+    requestLandscape,
+    chopTree,
+    fellTree,
+    getGroundHeight,
+    startGame,
+    showToast
   };
 }
 animate();
