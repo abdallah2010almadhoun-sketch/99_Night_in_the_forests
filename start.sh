@@ -7,15 +7,27 @@ PORT="${PORT:-3000}"
 OPENCODE_WEB_DIR="${OPENCODE_WEB_DIR:-/home/runner/work/_temp/omgithub-web}"
 export PORT OPENCODE_WEB_DIR
 
+needs_install=false
 if [[ ! -x node_modules/.bin/vite || ! -f node_modules/.package-lock.json || package.json -nt node_modules/.package-lock.json || ( -f package-lock.json && package-lock.json -nt node_modules/.package-lock.json ) ]]; then
+  needs_install=true
+fi
+
+if [[ "$needs_install" == true ]]; then
   if [[ -f package-lock.json ]]; then
-    /usr/bin/time -p npm ci --no-audit --no-fund
+    /usr/bin/time -p npm ci --include=dev --no-audit --no-fund
   else
-    /usr/bin/time -p npm install --no-audit --no-fund
+    /usr/bin/time -p npm install --include=dev --no-audit --no-fund
   fi
 fi
 
-if [[ ! -f dist/index.html ]] || find index.html src package.json package-lock.json vite.config.js -type f -newer dist/index.html -print -quit 2>/dev/null | grep -q .; then
+needs_build=false
+if [[ ! -f dist/index.html ]]; then
+  needs_build=true
+elif /usr/bin/time -p find index.html src package.json package-lock.json vite.config.js -type f -newer dist/index.html -print -quit 2>/dev/null | grep -q .; then
+  needs_build=true
+fi
+
+if [[ "$needs_build" == true ]]; then
   /usr/bin/time -p npm run build
 fi
 

@@ -25,12 +25,33 @@ const timed = async (label, action) => {
   try { return await action() }
   finally { console.log(`[timing] ${label}: ${Date.now() - start} ms`) }
 }
+
+// The game is landscape-only on phones. Capturing a portrait viewport would
+// correctly show the "Rotate your phone" overlay and hide the game, so the
+// mobile view uses a landscape handset viewport with touch enabled.
+const views = [
+  { name: 'desktop', options: { viewport: { width: 1280, height: 800 } } },
+  { name: 'mobile', options: { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } }
+]
+
+async function ensureLandscape (page) {
+  const portrait = await page.evaluate(() => window.innerHeight > window.innerWidth)
+  if (!portrait) return
+  const size = page.viewportSize()
+  const width = Math.max(size?.width ?? 0, size?.height ?? 0)
+  const height = Math.min(size?.width ?? 0, size?.height ?? 0)
+  console.log(`Portrait viewport detected; rotating capture viewport to ${width}x${height}.`)
+  await page.setViewportSize({ width, height })
+  await page.waitForFunction(() => window.innerWidth >= window.innerHeight)
+}
+
 let browser
 let exitCode = 0
 try {
   browser = await timed('browser launch', () => chromium.launch({ ...config.browser.launchOptions, timeout: 30000 })).catch(error => { error.exitCode = 75; throw error })
-  for (const [name, width, height] of [['desktop', 1280, 800], ['mobile', 390, 844]]) {
-    const page = await timed(`${name} page creation`, () => browser.newPage({ viewport: { width, height } })).catch(error => { error.exitCode = 75; throw error })
+  for (const view of views) {
+    const { name } = view
+    const page = await timed(`${name} page creation`, () => browser.newPage(view.options)).catch(error => { error.exitCode = 75; throw error })
     page.setDefaultTimeout(30000)
     const failures = []
     page.on('pageerror', error => failures.push(`JavaScript error: ${error.message}`))
@@ -67,12 +88,14 @@ try {
       await page.waitForFunction(() => document.fonts.status === 'loaded')
     })
 
+    await timed(`${name} landscape guard`, () => ensureLandscape(page))
+
     const startButton = page.locator('#startBtn')
     if (await startButton.isVisible()) {
       await timed(`${name} game start`, () => startButton.click())
       await page.waitForFunction(() => document.querySelector('#startOverlay')?.classList.contains('hidden'))
     }
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(600)
     await timed(`${name} screenshot`, () => page.screenshot({ path: join(output, `final-${name}.png`), timeout: 30000 }))
     await page.close()
     if (failures.length) {
