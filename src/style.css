@@ -40,6 +40,20 @@ body {
   background: #030b10;
 }
 
+#darkness {
+  position: fixed;
+  inset: 0;
+  z-index: 13;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 58%, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.94) 74%);
+  transition: opacity 4s ease;
+}
+
+#darkness.out {
+  opacity: 1;
+}
+
 #hud {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
@@ -48,6 +62,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 10px;
   padding: 0 16px;
   pointer-events: none;
   z-index: 20;
@@ -89,6 +104,119 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
+}
+
+.stats-panel {
+  min-width: 104px;
+  text-align: left;
+}
+
+.stat-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stat-line + .stat-line {
+  margin-top: 4px;
+}
+
+.mini-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.fire-panel {
+  min-width: 190px;
+  padding: 9px 12px;
+}
+
+.fuel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fuel-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.fuel-track {
+  margin-top: 6px;
+  height: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.fuel-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4fcf83, #8aec9b);
+  box-shadow: 0 0 10px rgba(116, 236, 155, 0.55);
+  transition: width 0.25s linear, background 0.4s ease;
+}
+
+.fuel-fill.low {
+  background: linear-gradient(90deg, #e08d2a, #ffba58);
+  box-shadow: 0 0 10px rgba(255, 186, 88, 0.55);
+}
+
+.fuel-fill.critical {
+  background: linear-gradient(90deg, #c92f2f, #ff5d5d);
+  box-shadow: 0 0 12px rgba(255, 93, 93, 0.65);
+  animation: fuelPulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes fuelPulse {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+.fire-panel .status {
+  margin-top: 5px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+#fireWarning {
+  position: fixed;
+  left: 50%;
+  top: max(120px, 21%);
+  z-index: 19;
+  transform: translate(-50%, -50%) scale(0.96);
+  padding: 11px 20px;
+  border: 1px solid rgba(255, 93, 93, 0.52);
+  border-radius: 14px;
+  background: rgba(38, 5, 5, 0.72);
+  color: #ff9a8f;
+  font-size: clamp(15px, 3vw, 24px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 2s ease, transform 2s ease;
+}
+
+#fireWarning.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  animation: warningPulse 2s ease-in-out infinite;
+}
+
+@keyframes warningPulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(255, 60, 60, 0.2); }
+  50% { box-shadow: 0 0 36px rgba(255, 60, 60, 0.5); }
 }
 
 #joystickZone {
@@ -186,6 +314,44 @@ button:active {
   transform: scale(0.98);
 }
 
+#interactBtn {
+  position: fixed;
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(218px, calc(env(safe-area-inset-bottom) + 218px));
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  min-height: 62px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 18px;
+  border-color: rgba(255, 214, 120, 0.6);
+  background: linear-gradient(180deg, rgba(196, 148, 66, 0.5), rgba(74, 44, 18, 0.82));
+  box-shadow: 0 0 24px rgba(255, 180, 60, 0.25), inset 0 1px rgba(255, 255, 255, 0.18);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  touch-action: none;
+}
+
+#interactBtn.ready {
+  border-color: rgba(255, 230, 150, 0.95);
+  box-shadow: 0 0 32px rgba(255, 180, 60, 0.48), inset 0 1px rgba(255, 255, 255, 0.25);
+}
+
+#interactBtn span {
+  display: block;
+}
+
+#interactKey {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
 #attackBtn {
   position: fixed;
   right: max(22px, env(safe-area-inset-right));
@@ -267,12 +433,30 @@ button:active {
 
 @media (max-width: 640px) {
   #hud {
+    gap: 6px;
     padding: 0 10px;
   }
 
   .panel {
     min-width: 72px;
     padding: 8px 10px;
+  }
+
+  .panel.center {
+    min-width: 148px;
+    padding: 7px 9px;
+  }
+
+  .stats-panel {
+    min-width: 72px;
+  }
+
+  .stat-line {
+    gap: 10px;
+  }
+
+  .mini-value {
+    font-size: 16px;
   }
 
   #joystickZone {
@@ -283,6 +467,15 @@ button:active {
 
   #desktopHelp {
     display: none;
+  }
+
+  #interactBtn {
+    right: 18px;
+    bottom: calc(env(safe-area-inset-bottom) + 194px);
+    width: 92px;
+    min-height: 56px;
+    padding: 8px 8px;
+    font-size: 13px;
   }
 
   #attackBtn {

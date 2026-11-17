@@ -10,14 +10,28 @@
   </head>
   <body>
     <canvas id="game"></canvas>
+    <div id="darkness" aria-hidden="true"></div>
 
     <div id="hud">
-      <div class="panel left">
-        <div class="label">NIGHT</div>
-        <div id="nightText" class="value">1</div>
+      <div class="panel left stats-panel">
+        <div class="stat-line">
+          <span class="label">NIGHT</span>
+          <span id="nightText" class="mini-value">1</span>
+        </div>
+        <div class="stat-line">
+          <span class="label">WOOD</span>
+          <span id="woodText" class="mini-value">0</span>
+        </div>
       </div>
-      <div class="panel center">
-        <div id="statusText" class="status">Campfire holds</div>
+      <div class="panel center fire-panel">
+        <div class="fuel-header">
+          <span class="label">CAMPFIRE</span>
+          <span id="fuelText" class="fuel-value">100%</span>
+        </div>
+        <div class="fuel-track">
+          <div id="fuelFill" class="fuel-fill"></div>
+        </div>
+        <div id="statusText" class="status">Fire is strong</div>
       </div>
       <div class="panel right">
         <div class="label">HEALTH</div>
@@ -25,21 +39,27 @@
       </div>
     </div>
 
+    <div id="fireWarning" aria-live="polite">The fire is out!</div>
+
     <div id="joystickZone" aria-label="Move joystick">
       <div id="joystickBase">
         <div id="joystickKnob"></div>
       </div>
     </div>
 
+    <button id="interactBtn" aria-label="Interact or chop">
+      <span id="interactLabel">INTERACT</span>
+      <span id="interactKey">E</span>
+    </button>
     <button id="attackBtn" aria-label="Swing your lantern">STRIKE <span>SPACE</span></button>
     <button id="jumpBtn" aria-label="Jump">JUMP <span>SHIFT</span></button>
-    <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG TO LOOK · SPACE STRIKE · SHIFT JUMP</div>
+    <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG LOOK · E INTERACT · SPACE STRIKE · SHIFT JUMP</div>
     <div id="lookZone" aria-label="Look around"></div>
 
     <div id="startOverlay" class="overlay visible">
       <div class="title">99 Nights</div>
-      <div class="subtitle">Survive the dark. Protect the campfire.</div>
-      <div class="hint">Move with the left pad. Drag on the right to look. Pinch to zoom.</div>
+      <div class="subtitle">Chop wood. Feed the campfire. Survive 99 nights.</div>
+      <div class="hint">Move with the left pad. Drag to look. Use INTERACT near trees and the fire.</div>
       <button id="startBtn">Begin</button>
     </div>
 
