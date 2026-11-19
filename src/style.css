@@ -1765,3 +1765,20 @@ button {
     font-size: 6px;
   }
 }
+
+/* ---------- Camera view toggle ---------- */
+
+.camera-btn.first-person {
+  color: #ffcf76;
+  border-color: rgba(255, 207, 118, 0.55);
+  background: rgba(38, 26, 8, 0.82);
+  box-shadow: 0 0 14px rgba(255, 169, 67, 0.26), inset 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Pointer input is handled globally so taps and camera drags can share the
+   whole game surface without the look layer stealing interactions. */
+#lookZone {
+  pointer-events: none;
+}
+
+/* First-person viewmodel arm + tool are rendered by the camera itself. */

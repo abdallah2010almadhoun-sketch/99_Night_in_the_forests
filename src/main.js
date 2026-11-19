@@ -54,6 +54,7 @@ const machineJobName = document.getElementById('machineJobName');
 const machineJobTime = document.getElementById('machineJobTime');
 const machineJobFill = document.getElementById('machineJobFill');
 const audioToggle = document.getElementById('audioToggle');
+const cameraBtn = document.getElementById('cameraBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -82,6 +83,20 @@ const IRON_ROCK_HITS = 2;
 const solidProps = [];
 const TREE_HITS_BASE = 3;
 
+// ---------- Camera / view constants ----------
+const CAMERA_EYE_HEIGHT = 1.6;
+const THIRD_PERSON_DISTANCE = 4;
+const THIRD_CAMERA_HEIGHT = 0.45;
+const THIRD_FOV = 67;
+const FIRST_FOV = 75;
+const PITCH_LIMIT = THREE.MathUtils.degToRad(80);
+const CAMERA_LOOK_SENSITIVITY_X = 0.0037;
+const CAMERA_LOOK_SENSITIVITY_Y = 0.0022;
+const TAP_MAX_MOVE = 10;
+const TAP_MAX_TIME = 360;
+const TAP_REACH = 4;
+const CAMERA_VIEW_STORAGE_KEY = 'nights.cameraView';
+
 // Gentle rolling ground keeps the campfire clearing flat while giving the player
 // broad, easy-to-climb slopes farther out in the forest.
 function getGroundHeight(x, z) {
@@ -109,6 +124,7 @@ plane.receiveShadow = true;
 world.add(plane);
 
 const campfire = new THREE.Group();
+campfire.userData.campfireRef = true;
 world.add(campfire);
 
 const campfireBase = new THREE.Mesh(
@@ -186,6 +202,7 @@ function createTree(x, z, scale = 1) {
   tree.userData.cameraMeshes = [trunk, foliage];
   tree.userData.trunk = trunk;
   tree.userData.foliage = foliage;
+  tree.userData.treeRef = tree;
   world.add(tree);
   treeData.push(tree);
   return tree;
@@ -587,6 +604,61 @@ axe.userData.tool = 'axe';
 handBackpack.userData.baseY = BACKPACK_BASE_Y;
 handBackpack.userData.tool = 'backpack';
 
+// ---------- First-person viewmodel ----------
+// Rendered by the camera itself so only the right arm and equipped tool show.
+scene.add(camera);
+
+const fpViewmodel = new THREE.Group();
+fpViewmodel.visible = false;
+camera.add(fpViewmodel);
+
+const fpArmPivot = new THREE.Group();
+fpArmPivot.position.set(0.47, -0.7, -0.8);
+fpArmPivot.rotation.set(-0.2, 0.14, 0.24);
+fpArmPivot.scale.setScalar(0.78);
+fpViewmodel.add(fpArmPivot);
+
+const fpArmMesh = makeAvatarPart(0.17, 0.5, 0.19, skinMaterial, 0.05);
+fpArmMesh.position.set(0, 0.22, 0);
+fpArmMesh.castShadow = false;
+fpArmPivot.add(fpArmMesh);
+
+const fpHandMesh = makeAvatarPart(0.2, 0.18, 0.22, skinMaterial, 0.045);
+fpHandMesh.position.set(0, 0.49, 0.01);
+fpHandMesh.castShadow = false;
+fpArmPivot.add(fpHandMesh);
+
+const fpToolMount = new THREE.Group();
+fpToolMount.position.set(0, 0.5, 0.02);
+fpArmPivot.add(fpToolMount);
+
+const fpToolModels = {
+  axe: axe.clone(true),
+  pickaxe: heldPickaxe.clone(true),
+  ironAxe: heldIronAxe.clone(true),
+  ironSword: heldIronSword.clone(true)
+};
+for (const [key, model] of Object.entries(fpToolModels)) {
+  model.position.set(0, 0, 0);
+  model.rotation.set(-0.15, 0.12, 0.26);
+  model.scale.setScalar(0.9);
+  model.visible = false;
+  model.userData.fpTool = key;
+  model.traverse((part) => {
+    if (part.isMesh) part.castShadow = false;
+  });
+  fpToolMount.add(model);
+}
+
+const FP_ARM_BASE = {
+  x: fpArmPivot.position.x,
+  y: fpArmPivot.position.y,
+  z: fpArmPivot.position.z,
+  rx: fpArmPivot.rotation.x,
+  ry: fpArmPivot.rotation.y,
+  rz: fpArmPivot.rotation.z
+};
+
 const playerGlow = new THREE.PointLight(0xffc071, 0.8, 14, 2);
 playerGlow.position.set(0, 1.9, 0);
 player.add(playerGlow);
@@ -635,7 +707,7 @@ for (let i = 0; i < 8; i += 1) {
   rock.castShadow = true;
   rock.receiveShadow = true;
   world.add(rock);
-  lowObstacles.push({ x, z, radius: 0.52 * scale, top: groundY + 0.605 * scale });
+  lowObstacles.push({ x, z, radius: 0.52 * scale, top: groundY + 0.605 * scale, mesh: rock });
 }
 
 const plantedSaplings = [];
@@ -703,7 +775,9 @@ function addBerryBush(x, z) {
   bush.position.set(x, getGroundHeight(x, z), z);
   bush.rotation.y = Math.random() * Math.PI * 2;
   world.add(bush);
-  berryBushes.push({ x, z, mesh: bush });
+  const entry = { x, z, mesh: bush, nextHarvest: 0 };
+  bush.userData.berryBushRef = entry;
+  berryBushes.push(entry);
 }
 
 for (let i = 0; i < 15; i += 1) {
@@ -1895,7 +1969,7 @@ function openMachinePanel() {
   setInventoryOpen(false);
   setSettingsOpen(false);
   releaseJoystick();
-  lookPointers.clear();
+  activePointers.clear();
   state.look.active = false;
   state.pinchDistance = 0;
   buildUpgradeOptions();
@@ -2208,13 +2282,15 @@ function plantSapling() {
   mesh.position.set(x, getGroundHeight(x, z), z);
   mesh.rotation.y = Math.random() * Math.PI * 2;
   world.add(mesh);
-  plantedSaplings.push({
+  const sapling = {
     mesh,
     x,
     z,
     growth: 0,
     sway: Math.random() * Math.PI * 2
-  });
+  };
+  mesh.userData.saplingRef = sapling;
+  plantedSaplings.push(sapling);
   updateHud();
   showToast('Planted a sapling');
 }
@@ -2386,6 +2462,7 @@ function makeEnemy() {
     circleDir: Math.random() < 0.5 ? 1 : -1
   };
   scene.add(enemy);
+  enemy.userData.enemyRef = enemy;
   enemies.push(enemy);
   return enemy;
 }
@@ -2445,9 +2522,29 @@ const sparkMaxLife = new Float32Array(SPARK_COUNT);
 const sparkGeometry = new THREE.BufferGeometry();
 const sparkAttribute = new THREE.BufferAttribute(sparkPositions, 3);
 sparkGeometry.setAttribute('position', sparkAttribute);
+// Soft round ember sprite so points never read as hard squares up close.
+function createSparkTexture() {
+  const size = 32;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = size;
+  canvasEl.height = size;
+  const ctx = canvasEl.getContext('2d');
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.35, 'rgba(255, 224, 160, 0.95)');
+  gradient.addColorStop(0.7, 'rgba(255, 168, 66, 0.45)');
+  gradient.addColorStop(1, 'rgba(255, 140, 40, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 const sparkMaterial = new THREE.PointsMaterial({
   color: 0xffc36b,
   size: 0.065,
+  map: createSparkTexture(),
   transparent: true,
   opacity: 0.9,
   depthWrite: false,
@@ -2528,7 +2625,10 @@ const state = {
   pinchDistance: 0,
   cameraYaw: 0,
   cameraPitch: 0,
-  cameraDistance: 5.7,
+  cameraDistance: THIRD_PERSON_DISTANCE,
+  firstPerson: false,
+  viewBlend: 0,
+  cameraInitialized: false,
   cycleTime: 0,
   daylight: 1,
   nightActive: false,
@@ -2568,6 +2668,40 @@ const state = {
   hitEffectTimer: 0,
 };
 
+// Restore the player's last camera choice. A fresh game starts in third-person.
+try {
+  const savedView = window.localStorage.getItem(CAMERA_VIEW_STORAGE_KEY);
+  if (savedView === 'first') {
+    state.firstPerson = true;
+    state.viewBlend = 1;
+  }
+} catch (error) {
+  // Storage can be blocked; third-person remains the default.
+}
+
+function setFirstPerson(first, announce = true) {
+  state.firstPerson = !!first;
+  if (cameraBtn) {
+    cameraBtn.classList.toggle('first-person', state.firstPerson);
+    cameraBtn.setAttribute('aria-pressed', String(state.firstPerson));
+    cameraBtn.setAttribute(
+      'aria-label',
+      state.firstPerson ? 'Switch to third-person view' : 'Switch to first-person view'
+    );
+  }
+  try {
+    window.localStorage.setItem(CAMERA_VIEW_STORAGE_KEY, state.firstPerson ? 'first' : 'third');
+  } catch (error) {
+    // Ignore storage failures.
+  }
+  if (announce) showToast(state.firstPerson ? 'First-person view' : 'Third-person view');
+}
+
+function toggleCameraView() {
+  setFirstPerson(!state.firstPerson);
+  playEquipClick();
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -2575,6 +2709,12 @@ function clamp(value, min, max) {
 function smoothstep(value) {
   const t = clamp(value, 0, 1);
   return t * t * (3 - 2 * t);
+}
+
+function lerpAngle(current, target, amount) {
+  let delta = target - current;
+  delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+  return current + delta * amount;
 }
 
 function updateHud() {
@@ -2834,6 +2974,41 @@ function updateEquippedTool(delta) {
   }
 }
 
+function updateFpToolVisibility(firstPersonActive) {
+  for (const [key, model] of Object.entries(fpToolModels)) {
+    model.visible = firstPersonActive && state.equippedTool === key;
+  }
+}
+
+function updateFpViewmodel(delta) {
+  if (!fpViewmodel.visible) return;
+
+  let swing = 0;
+  if (state.attackTimer > 0) {
+    const progress = 1 - state.attackTimer / ATTACK_DURATION;
+    swing = Math.sin(clamp(progress, 0, 1) * Math.PI);
+  } else if (state.chopTimer > 0) {
+    const progress = 1 - state.chopTimer / 0.3;
+    swing = Math.sin(clamp(progress, 0, 1) * Math.PI) * 0.85;
+  } else if (state.equipTimer > 0) {
+    const progress = 1 - state.equipTimer / EQUIP_TIME;
+    swing = -Math.sin(clamp(progress, 0, 1) * Math.PI) * 0.3;
+  }
+
+  const moving = state.moveSpeed > 0.1 && state.grounded;
+  const bobSpeed = state.walkPhase;
+  const swayX = moving ? Math.sin(bobSpeed) * 0.018 : Math.sin(state.idleTime * 1.7) * 0.006;
+  const bobY = moving ? Math.abs(Math.cos(bobSpeed)) * 0.012 : Math.sin(state.idleTime * 1.5) * 0.004;
+
+  const damping = 1 - Math.exp(-18 * delta);
+  fpArmPivot.position.x += (FP_ARM_BASE.x + swayX - fpArmPivot.position.x) * damping;
+  fpArmPivot.position.y += (FP_ARM_BASE.y + bobY - fpArmPivot.position.y) * damping;
+  fpArmPivot.position.z = FP_ARM_BASE.z;
+  fpArmPivot.rotation.x += (FP_ARM_BASE.rx - swing * 1.35 - fpArmPivot.rotation.x) * damping;
+  fpArmPivot.rotation.y = FP_ARM_BASE.ry;
+  fpArmPivot.rotation.z += (FP_ARM_BASE.rz + swing * 0.55 - fpArmPivot.rotation.z) * damping;
+}
+
 function resetJoystickVisual() {
   joystickKnob.style.transform = 'translate(-50%, -50%)';
 }
@@ -2886,53 +3061,79 @@ function releaseJoystick() {
 joystickZone.addEventListener('pointerup', releaseJoystick);
 joystickZone.addEventListener('pointercancel', releaseJoystick);
 
-const lookPointers = new Map();
+// Unified pointer handling: a short, still touch is a tap interaction; movement
+// past the slop becomes a camera drag. Input from either half can tap, but only
+// drags that start on the right half rotate the camera.
+const activePointers = new Map();
 
-function getPinchDistance() {
-  const points = [...lookPointers.values()];
-  if (points.length < 2) return 0;
-  return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+function isUiTarget(target) {
+  return !!(target && target.closest && target.closest(
+    'button, #inventoryPanel, #upgradePanel, #settingsPanel, #startOverlay, '
+    + '#rotateOverlay, #audioControls, #hotbar, #actionCluster, #joystickZone'
+  ));
 }
 
-lookZone.addEventListener('pointerdown', (event) => {
-  if (!state.started || state.inventoryOpen || state.machineOpen || state.settingsOpen) return;
-  event.preventDefault();
-  lookPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  state.look.active = true;
-  state.pinchDistance = getPinchDistance();
-  lookZone.setPointerCapture(event.pointerId);
-});
-
-lookZone.addEventListener('pointermove', (event) => {
-  if (!state.started || state.inventoryOpen || state.machineOpen || state.settingsOpen) return;
-  const previous = lookPointers.get(event.pointerId);
-  if (!previous) return;
-  event.preventDefault();
-  lookPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-  if (lookPointers.size === 1) {
-    const dx = event.clientX - previous.x;
-    const dy = event.clientY - previous.y;
-    state.cameraYaw -= dx * 0.0037;
-    state.cameraPitch = clamp(state.cameraPitch - dy * 0.0022, -0.7, 0.45);
-    return;
-  }
-
-  const distance = getPinchDistance();
-  if (state.pinchDistance > 0 && distance > 0) {
-    state.cameraDistance = clamp(state.cameraDistance * (state.pinchDistance / distance), 3, 8.5);
-  }
-  state.pinchDistance = distance;
-});
-
-function releaseLookPointer(event) {
-  lookPointers.delete(event.pointerId);
-  state.pinchDistance = lookPointers.size >= 2 ? getPinchDistance() : 0;
-  if (lookPointers.size === 0) state.look.active = false;
+function interactionBlocked() {
+  return !state.started || state.gameOver || state.falling || state.portrait
+    || state.inventoryOpen || state.machineOpen || state.settingsOpen;
 }
 
-lookZone.addEventListener('pointerup', releaseLookPointer);
-lookZone.addEventListener('pointercancel', releaseLookPointer);
+window.addEventListener('pointerdown', (event) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  if (isUiTarget(event.target)) return;
+  if (!state.started || state.gameOver || state.falling || state.portrait) return;
+
+  activePointers.set(event.pointerId, {
+    startX: event.clientX,
+    startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    startTime: performance.now(),
+    moved: 0,
+    dragging: false,
+    canLook: event.clientX >= window.innerWidth * 0.5
+  });
+});
+
+window.addEventListener('pointermove', (event) => {
+  const track = activePointers.get(event.pointerId);
+  if (!track) return;
+
+  const dx = event.clientX - track.lastX;
+  const dy = event.clientY - track.lastY;
+  track.lastX = event.clientX;
+  track.lastY = event.clientY;
+  track.moved = Math.max(
+    track.moved,
+    Math.hypot(event.clientX - track.startX, event.clientY - track.startY)
+  );
+
+  if (!track.dragging && track.moved > TAP_MAX_MOVE) track.dragging = true;
+  if (!track.dragging || !track.canLook || interactionBlocked()) return;
+
+  // Drag right = look right, drag up = look up.
+  state.cameraYaw += dx * CAMERA_LOOK_SENSITIVITY_X;
+  state.cameraPitch = clamp(
+    state.cameraPitch - dy * CAMERA_LOOK_SENSITIVITY_Y,
+    -PITCH_LIMIT,
+    PITCH_LIMIT
+  );
+});
+
+function endPointer(event) {
+  const track = activePointers.get(event.pointerId);
+  if (!track) return;
+  activePointers.delete(event.pointerId);
+
+  if (event.type === 'pointercancel') return;
+  if (track.dragging || track.moved > TAP_MAX_MOVE) return;
+  if (performance.now() - track.startTime > TAP_MAX_TIME) return;
+  if (interactionBlocked()) return;
+  handleWorldTap(track.startX, track.startY);
+}
+
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
 
 function isPortraitViewport() {
   return window.innerHeight > window.innerWidth;
@@ -2979,7 +3180,7 @@ function startGame() {
   state.keys.clear();
   state.cameraYaw = 0;
   state.cameraPitch = 0;
-  state.cameraDistance = 5.7;
+  state.cameraDistance = THIRD_PERSON_DISTANCE;
   state.velocityY = 0;
   state.grounded = true;
   state.jumpHeld = false;
@@ -3033,12 +3234,13 @@ function startGame() {
   resetIronRocks();
   player.position.set(0, getGroundHeight(0, -3.5), -3.5);
   player.rotation.y = 0;
+  state.cameraInitialized = false;
   leftArm.rotation.set(0, 0, 0);
   rightArm.rotation.set(0, 0, 0);
   leftLeg.rotation.set(0, 0, 0);
   rightLeg.rotation.set(0, 0, 0);
   avatar.position.y = 0.01;
-  lookPointers.clear();
+  activePointers.clear();
   state.look.active = false;
   state.pinchDistance = 0;
 
@@ -3175,35 +3377,71 @@ unequipBtn.addEventListener('pointerdown', (event) => {
   unequipTool();
 });
 
-// Tapping a world item picks it up. Track short taps so camera drags are ignored.
-let worldTap = null;
-window.addEventListener('pointerdown', (event) => {
-  if (event.pointerType === 'mouse' && event.button !== 0) return;
-  if (event.target.closest('button, #inventoryPanel, #upgradePanel, #settingsPanel, #startOverlay, #rotateOverlay')) return;
-  if (event.target.closest('#joystickZone, #hotbar, #actionCluster')) return;
-  worldTap = {
-    id: event.pointerId,
-    x: event.clientX,
-    y: event.clientY,
-    time: performance.now()
-  };
-});
-
-window.addEventListener('pointerup', (event) => {
-  if (!worldTap || worldTap.id !== event.pointerId) return;
-  const tap = worldTap;
-  worldTap = null;
-  if (!state.started || state.gameOver || state.falling || state.inventoryOpen
-    || state.machineOpen || state.settingsOpen || state.portrait) return;
-  const moved = Math.hypot(event.clientX - tap.x, event.clientY - tap.y);
-  if (moved > 12 || performance.now() - tap.time > 420) return;
-  handleWorldTap(event.clientX, event.clientY);
-});
-
+// ---------- Direct touch interaction ----------
 const tapRaycaster = new THREE.Raycaster();
 const tapPointer = new THREE.Vector2();
 
+const OUTLINE_TIME = 0.3;
+const outlineMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  side: THREE.BackSide,
+  transparent: true,
+  opacity: 0.9,
+  depthWrite: false
+});
+const outlineEffects = [];
+
+function flashOutline(root) {
+  if (!root) return;
+  // Collect first: adding shells while traversing would recurse forever.
+  const targets = [];
+  root.traverse((node) => {
+    if (!node.isMesh || !node.geometry || node.userData.outlineShell) return;
+    targets.push(node);
+  });
+  if (targets.length === 0) return;
+  const shells = [];
+  for (const node of targets) {
+    const shell = new THREE.Mesh(node.geometry, outlineMaterial);
+    shell.scale.setScalar(1.05);
+    shell.renderOrder = 3;
+    shell.userData.outlineShell = true;
+    node.add(shell);
+    shells.push({ node, shell });
+  }
+  outlineEffects.push({ shells, until: performance.now() + OUTLINE_TIME * 1000 });
+}
+
+function updateOutlines() {
+  if (outlineEffects.length === 0) return;
+  const now = performance.now();
+  for (let i = outlineEffects.length - 1; i >= 0; i -= 1) {
+    const effect = outlineEffects[i];
+    if (now < effect.until) continue;
+    for (const { node, shell } of effect.shells) node.remove(shell);
+    outlineEffects.splice(i, 1);
+  }
+}
+
+function resolveTapOwner(object) {
+  let node = object;
+  while (node) {
+    const data = node.userData;
+    if (data.itemRef) return { kind: 'item', item: data.itemRef, mesh: node };
+    if (data.rockRef) return { kind: 'rock', rock: data.rockRef };
+    if (data.treeRef) return { kind: 'tree', tree: data.treeRef };
+    if (data.enemyRef) return { kind: 'enemy', enemy: data.enemyRef };
+    if (data.saplingRef) return { kind: 'sapling', sapling: data.saplingRef };
+    if (data.berryBushRef) return { kind: 'berry', bush: data.berryBushRef };
+    if (data.machineRef) return { kind: 'machine' };
+    if (data.campfireRef) return { kind: 'campfire' };
+    node = node.parent;
+  }
+  return null;
+}
+
 function handleWorldTap(clientX, clientY) {
+  if (interactionBlocked()) return;
   const rect = canvas.getBoundingClientRect();
   tapPointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
   tapPointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -3212,33 +3450,54 @@ function handleWorldTap(clientX, clientY) {
   const candidates = [];
   for (const item of groundItems) {
     if (item.carried || item.popping > 0) continue;
-    const dx = player.position.x - item.x;
-    const dz = player.position.z - item.z;
-    if (dx * dx + dz * dz > (PICKUP_RANGE + 0.6) * (PICKUP_RANGE + 0.6)) continue;
     candidates.push(item.mesh);
   }
-
   for (const rock of ironRocks) {
-    if (rock.broken) continue;
-    if (Math.hypot(player.position.x - rock.x, player.position.z - rock.z) > TREE_INTERACT_RANGE + 0.8) continue;
-    candidates.push(rock.group);
+    if (!rock.broken) candidates.push(rock.group);
   }
-
-  if (getMachineDistance() < MACHINE_INTERACT_RANGE + 2) candidates.push(machine);
+  for (const tree of treeData) {
+    if (tree.visible && tree.userData.choppable && !tree.userData.falling) candidates.push(tree);
+  }
+  for (const enemy of enemies) {
+    if (enemy.visible && !enemy.userData.fading && !enemy.userData.dead) candidates.push(enemy);
+  }
+  for (const sapling of plantedSaplings) candidates.push(sapling.mesh);
+  for (const bush of berryBushes) candidates.push(bush.mesh);
+  candidates.push(machine, campfire);
 
   if (candidates.length === 0) return;
 
   const hits = tapRaycaster.intersectObjects(candidates, true);
-  if (hits.length === 0) return;
-
-  let object = hits[0].object;
-  while (object) {
-    if (object.userData.itemRef) {
-      pickUpItem(object.userData.itemRef);
+  for (const hit of hits) {
+    // Particle systems (sparks, smoke) can intersect anywhere along the ray and
+    // would otherwise swallow taps aimed at the world behind them.
+    if (!hit.object.isMesh) continue;
+    const owner = resolveTapOwner(hit.object);
+    if (owner) {
+      applyTapInteraction(owner);
       return;
     }
-    if (object.userData.rockRef) {
-      const rock = object.userData.rockRef;
+  }
+}
+
+function applyTapInteraction(owner) {
+  const px = player.position.x;
+  const pz = player.position.z;
+  const withinReach = (x, z) => Math.hypot(px - x, pz - z) <= TAP_REACH;
+  const tooFar = () => showToast('Too far');
+
+  switch (owner.kind) {
+    case 'item': {
+      const item = owner.item;
+      if (!withinReach(item.x, item.z)) return tooFar();
+      flashOutline(item.mesh);
+      pickUpItem(item);
+      return;
+    }
+    case 'rock': {
+      const rock = owner.rock;
+      if (!withinReach(rock.x, rock.z)) return tooFar();
+      flashOutline(rock.group);
       if (!canMineTool(state.equippedTool)) {
         showToast('Equip the pickaxe to mine iron');
         return;
@@ -3246,13 +3505,101 @@ function handleWorldTap(clientX, clientY) {
       mineIronRock(rock);
       return;
     }
-    if (object.userData.machineRef) {
-      if (getMachineDistance() <= MACHINE_INTERACT_RANGE) openMachinePanel();
-      else showToast('Move closer to the machine');
+    case 'tree': {
+      const tree = owner.tree;
+      if (!withinReach(tree.position.x, tree.position.z)) return tooFar();
+      flashOutline(tree);
+      if (!canChopTool(state.equippedTool)) {
+        showToast('Equip the axe to chop');
+        return;
+      }
+      chopTree(tree, TOOL_STATS[state.equippedTool]?.treePower ?? 1);
       return;
     }
-    object = object.parent;
+    case 'enemy': {
+      const enemy = owner.enemy;
+      if (!withinReach(enemy.position.x, enemy.position.z)) return tooFar();
+      flashOutline(enemy);
+      attack(enemy);
+      return;
+    }
+    case 'sapling': {
+      if (!withinReach(owner.sapling.x, owner.sapling.z)) return tooFar();
+      flashOutline(owner.sapling.mesh);
+      showToast('The sapling is still growing');
+      return;
+    }
+    case 'berry': {
+      const bush = owner.bush;
+      if (!withinReach(bush.x, bush.z)) return tooFar();
+      flashOutline(bush.mesh);
+      harvestBerryBush(bush);
+      return;
+    }
+    case 'machine': {
+      if (getMachineDistance() > TAP_REACH) return tooFar();
+      if (getMachineDistance() > MACHINE_INTERACT_RANGE) {
+        showToast('Move closer to the machine');
+        return;
+      }
+      flashOutline(machine);
+      openMachinePanel();
+      return;
+    }
+    case 'campfire': {
+      if (getCampfireDistance() > TAP_REACH) return tooFar();
+      flashOutline(campfire);
+      tapCampfire();
+      return;
+    }
+    default:
+      break;
   }
+}
+
+function harvestBerryBush(bush) {
+  const now = performance.now();
+  if (now < (bush.nextHarvest || 0)) {
+    showToast('The bush needs a moment');
+    return;
+  }
+  bush.nextHarvest = now + 4500;
+
+  if (isBackpackEquipped()) {
+    if (backpackCount() >= BACKPACK_CAPACITY) {
+      showToast('Backpack is full');
+      return;
+    }
+    state.backpack.berry += 1;
+    updateHud();
+    playPickupSound();
+    showToast('+1 berry');
+    return;
+  }
+
+  if (carriedItems.length >= CARRY_LIMIT) {
+    showToast('Hands full - 3 items max');
+    return;
+  }
+  const item = spawnGroundItem('berry', player.position.x, player.position.z, {
+    startY: getGroundHeight(player.position.x, player.position.z) + 0.5,
+    velocityY: 1.2,
+    pickupDelay: 0
+  });
+  pickUpItem(item);
+}
+
+function tapCampfire() {
+  const carriedFuel = carriedItems.some((item) => FIRE_FUEL_TYPES.has(item.type));
+  if (carriedFuel) {
+    throwCarriedIntoFire();
+    return;
+  }
+  if (backpackFuelCount() > 0) {
+    feedFireFromBackpack();
+    return;
+  }
+  showToast(state.fuel >= 99.5 ? 'The fire is already full' : 'Add wood to feed the fire');
 }
 
 function setJumpHeld(held) {
@@ -3293,13 +3640,23 @@ function resetToMenu(title, subtitle, hint, buttonText) {
   darkness.style.opacity = '0';
 }
 
-function attack() {
+function attack(targetEnemy = null) {
   if (!state.started || state.gameOver || state.falling || state.paused || state.machineOpen || state.settingsOpen) return;
   if (state.attackCooldown > 0) return;
   const stats = TOOL_STATS[state.equippedTool];
   if (!stats) {
     showToast(state.equippedTool === 'backpack' ? 'Unequip the backpack to fight' : 'Equip a tool to attack');
     return;
+  }
+
+  if (targetEnemy) {
+    player.rotation.y = Math.atan2(
+      targetEnemy.position.x - player.position.x,
+      targetEnemy.position.z - player.position.z
+    );
+  } else if (state.firstPerson) {
+    // In first-person, strikes follow where the camera looks.
+    player.rotation.y = state.cameraYaw;
   }
 
   state.attackCooldown = stats.cooldown;
@@ -3309,13 +3666,25 @@ function attack() {
   playerGlow.intensity = 1.8;
   playAxeWhoosh();
 
-  if (state.targetRock && stats.rockPower > 0) {
-    mineIronRock(state.targetRock, stats.rockPower);
-  } else if (state.targetTree && stats.treePower > 0) {
-    chopTree(state.targetTree, stats.treePower);
+  if (!targetEnemy) {
+    if (state.targetRock && stats.rockPower > 0) {
+      mineIronRock(state.targetRock, stats.rockPower);
+    } else if (state.targetTree && stats.treePower > 0) {
+      chopTree(state.targetTree, stats.treePower);
+    }
   }
 
   const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+
+  if (targetEnemy) {
+    if (targetEnemy.visible && !targetEnemy.userData.fading) {
+      const offset = targetEnemy.position.clone().sub(player.position);
+      offset.y = 0;
+      if (offset.length() <= TAP_REACH) damageEnemy(targetEnemy, stats, forward);
+    }
+    return;
+  }
+
   for (const enemy of enemies) {
     if (!enemy.visible || enemy.userData.fading) continue;
     const offset = enemy.position.clone().sub(player.position);
@@ -3324,28 +3693,31 @@ function attack() {
     if (distance > stats.range || distance < 0.01) continue;
     offset.normalize();
     if (forward.dot(offset) < 0.2) continue;
+    damageEnemy(enemy, stats, forward);
+  }
+}
 
-    const data = enemy.userData;
-    data.health -= stats.damage;
-    data.hitTimer = 0.22;
-    data.bodyMat.emissive.setHex(0xff2f1a);
-    data.bodyMat.emissiveIntensity = 1.1;
-    data.knockback.addScaledVector(forward, 4.2 + stats.damage * 0.6);
-    playMeleeHit();
+function damageEnemy(enemy, stats, forward) {
+  const data = enemy.userData;
+  data.health -= stats.damage;
+  data.hitTimer = 0.22;
+  data.bodyMat.emissive.setHex(0xff2f1a);
+  data.bodyMat.emissiveIntensity = 1.1;
+  data.knockback.addScaledVector(forward, 4.2 + stats.damage * 0.6);
+  playMeleeHit();
 
-    hitEffect.position.copy(enemy.position);
-    hitEffect.position.y += 1.15;
-    hitEffect.scale.setScalar(0.8);
-    hitEffect.material.opacity = 0.95;
-    hitEffect.visible = true;
-    state.hitEffectTimer = 0.22;
+  hitEffect.position.copy(enemy.position);
+  hitEffect.position.y += 1.15;
+  hitEffect.scale.setScalar(0.8);
+  hitEffect.material.opacity = 0.95;
+  hitEffect.visible = true;
+  state.hitEffectTimer = 0.22;
 
-    if (data.health <= 0) {
-      data.health = 0;
-      data.dead = true;
-      data.attackCooldown = 0;
-      startEnemyFade(enemy, 4);
-    }
+  if (data.health <= 0) {
+    data.health = 0;
+    data.dead = true;
+    data.attackCooldown = 0;
+    startEnemyFade(enemy, 4);
   }
 }
 
@@ -3583,7 +3955,9 @@ function movePlayer(delta) {
   moveDir.normalize();
 
   state.moveSpeed = PLAYER_SPEED;
-  player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+  const targetYaw = Math.atan2(moveDir.x, moveDir.z);
+  const turn = 1 - Math.exp(-15 * delta);
+  player.rotation.y = lerpAngle(player.rotation.y, targetYaw, turn);
 
   const nextX = player.position.x + moveDir.x * delta * PLAYER_SPEED;
   const nextZ = player.position.z + moveDir.z * delta * PLAYER_SPEED;
@@ -3977,61 +4351,130 @@ function updateDayNight(delta) {
 }
 
 const cameraRaycaster = new THREE.Raycaster();
-const cameraTarget = new THREE.Vector3();
+const cameraPivot = new THREE.Vector3();
+const cameraForward = new THREE.Vector3();
+const thirdPersonPos = new THREE.Vector3();
+const firstPersonPos = new THREE.Vector3();
 const cameraDesired = new THREE.Vector3();
+const cameraLookTarget = new THREE.Vector3();
+const cameraLookForward = new THREE.Vector3();
 const cameraRayDirection = new THREE.Vector3();
 const cameraCandidates = [];
 
-function updateCamera() {
+function updateCamera(delta = 0.016) {
   const yaw = state.cameraYaw;
-  const desiredDistance = state.cameraDistance;
-  const height = Math.max(0.45, 1.5 + state.cameraPitch * 2.1);
+  const pitch = state.cameraPitch;
+  const cosPitch = Math.cos(pitch);
+  const sinPitch = Math.sin(pitch);
 
-  cameraTarget.copy(player.position);
-  cameraTarget.y += 1.35;
-
-  cameraDesired.set(
-    cameraTarget.x - Math.sin(yaw) * desiredDistance,
-    cameraTarget.y + height,
-    cameraTarget.z - Math.cos(yaw) * desiredDistance
+  // Pivot sits at the character's eye height, so the camera rotates around the head.
+  cameraPivot.set(
+    player.position.x,
+    player.position.y + CAMERA_EYE_HEIGHT,
+    player.position.z
+  );
+  cameraForward.set(
+    Math.sin(yaw) * cosPitch,
+    sinPitch,
+    Math.cos(yaw) * cosPitch
   );
 
-  cameraRayDirection.copy(cameraDesired).sub(cameraTarget);
+  // Third-person: orbit the pivot from slightly above and behind.
+  const desiredDistance = state.cameraDistance || THIRD_PERSON_DISTANCE;
+  thirdPersonPos.copy(cameraPivot).addScaledVector(cameraForward, -desiredDistance);
+  thirdPersonPos.y += THIRD_CAMERA_HEIGHT;
+
+  cameraRayDirection.copy(thirdPersonPos).sub(cameraPivot);
   const fullDistance = cameraRayDirection.length();
-  cameraRayDirection.normalize();
+  if (fullDistance > 0.0001) cameraRayDirection.normalize();
 
   cameraCandidates.length = 0;
-  const broadRadius = desiredDistance + 4;
+  const broadRadius = desiredDistance + 3.2;
   for (const tree of treeData) {
     if (!tree.visible) continue;
-    const dx = tree.position.x - cameraTarget.x;
-    const dz = tree.position.z - cameraTarget.z;
+    const dx = tree.position.x - cameraPivot.x;
+    const dz = tree.position.z - cameraPivot.z;
     if (dx * dx + dz * dz < broadRadius * broadRadius) {
       cameraCandidates.push(tree.userData.cameraMeshes[0], tree.userData.cameraMeshes[1]);
     }
   }
+  for (const rock of ironRocks) {
+    if (rock.broken) continue;
+    if (Math.hypot(rock.x - cameraPivot.x, rock.z - cameraPivot.z) < broadRadius) {
+      cameraCandidates.push(rock.group);
+    }
+  }
+  for (const obstacle of lowObstacles) {
+    if (Math.hypot(obstacle.x - cameraPivot.x, obstacle.z - cameraPivot.z) < broadRadius) {
+      cameraCandidates.push(obstacle.mesh);
+    }
+  }
+  for (const wall of placedWalls) {
+    if (Math.hypot(wall.x - cameraPivot.x, wall.z - cameraPivot.z) < broadRadius) {
+      cameraCandidates.push(wall.group);
+    }
+  }
+  if (Math.hypot(machine.position.x - cameraPivot.x, machine.position.z - cameraPivot.z) < broadRadius) {
+    cameraCandidates.push(machine);
+  }
 
   let distance = fullDistance;
   if (cameraCandidates.length > 0) {
-    cameraRaycaster.set(cameraTarget, cameraRayDirection);
+    cameraRaycaster.set(cameraPivot, cameraRayDirection);
     cameraRaycaster.far = fullDistance;
-    const hits = cameraRaycaster.intersectObjects(cameraCandidates, false);
-    if (hits.length > 0) distance = Math.max(1.4, hits[0].distance - 0.28);
+    const hits = cameraRaycaster.intersectObjects(cameraCandidates, true);
+    if (hits.length > 0) distance = Math.max(0.85, hits[0].distance - 0.24);
   }
 
-  cameraDesired.copy(cameraTarget).addScaledVector(cameraRayDirection, distance);
-  const groundClearance = getGroundHeight(cameraDesired.x, cameraDesired.z) + 0.35;
-  if (cameraDesired.y < groundClearance) cameraDesired.y = groundClearance;
+  thirdPersonPos.copy(cameraPivot).addScaledVector(cameraRayDirection, distance);
+
+  // Never sink into the terrain.
+  const groundClearance = getGroundHeight(thirdPersonPos.x, thirdPersonPos.z) + 0.35;
+  if (thirdPersonPos.y < groundClearance) thirdPersonPos.y = groundClearance;
+
+  firstPersonPos.copy(cameraPivot);
+
+  // Ease between the two views.
+  const targetBlend = state.firstPerson ? 1 : 0;
+  const blendRate = 1 - Math.exp(-13 * delta);
+  state.viewBlend += (targetBlend - state.viewBlend) * blendRate;
+  if (Math.abs(state.viewBlend - targetBlend) < 0.0015) state.viewBlend = targetBlend;
+  const blend = smoothstep(clamp(state.viewBlend, 0, 1));
+
+  cameraDesired.lerpVectors(thirdPersonPos, firstPersonPos, blend);
 
   const obstructed = distance < fullDistance - 0.01;
-  camera.position.lerp(cameraDesired, obstructed ? 0.55 : 0.16);
-  const smoothedGround = getGroundHeight(camera.position.x, camera.position.z) + 0.3;
-  if (camera.position.y < smoothedGround) camera.position.y = smoothedGround;
+  if (!state.cameraInitialized) {
+    camera.position.copy(cameraDesired);
+    state.cameraInitialized = true;
+  } else if (blend > 0.92) {
+    // Locked to the eye in first-person so movement never causes camera lag.
+    camera.position.copy(cameraDesired);
+  } else {
+    const follow = obstructed ? Math.min(1, blendRate * 3.4) : Math.min(1, blendRate * 0.95);
+    camera.position.lerp(cameraDesired, Math.max(0.12, follow));
+  }
+  const floor = getGroundHeight(camera.position.x, camera.position.z) + 0.28;
+  if (camera.position.y < floor) camera.position.y = floor;
 
-  cameraTarget.x += Math.sin(yaw) * 6;
-  cameraTarget.y += state.cameraPitch * 6;
-  cameraTarget.z += Math.cos(yaw) * 6;
-  camera.lookAt(cameraTarget);
+  // Third-person looks at the head pivot; first-person looks straight ahead.
+  cameraLookTarget.copy(cameraPivot).lerp(
+    cameraLookForward.copy(cameraPivot).addScaledVector(cameraForward, 10),
+    blend
+  );
+  camera.lookAt(cameraLookTarget);
+
+  const fov = THIRD_FOV + (FIRST_FOV - THIRD_FOV) * blend;
+  if (Math.abs(camera.fov - fov) > 0.01) {
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }
+
+  const firstPersonActive = blend > 0.5;
+  avatar.visible = !firstPersonActive;
+  fpViewmodel.visible = firstPersonActive;
+  updateFpToolVisibility(firstPersonActive);
+  if (firstPersonActive) strikeArc.visible = false;
 }
 
 // ---------- Generated audio ----------
@@ -4516,6 +4959,12 @@ audioToggle.addEventListener('pointerdown', (event) => {
   toggleAudioMute();
 });
 
+cameraBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  toggleCameraView();
+});
+
 settingsBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -4533,6 +4982,7 @@ volumeSlider.addEventListener('input', () => {
 
 setAudioVolume(audio.volume);
 updateAudioToggleUi();
+setFirstPerson(state.firstPerson, false);
 
 function animate() {
   requestAnimationFrame(animate);
@@ -4545,7 +4995,7 @@ function animate() {
     document.body.classList.toggle('portrait', portrait);
     if (portrait) {
       releaseJoystick();
-      lookPointers.clear();
+      activePointers.clear();
       state.look.active = false;
       state.pinchDistance = 0;
       state.keys.clear();
@@ -4618,6 +5068,8 @@ function animate() {
     }
 
     updateAvatar(delta);
+    updateFpViewmodel(delta);
+    updateOutlines();
 
     if (state.damageFlash > 0) {
       state.damageFlash = Math.max(0, state.damageFlash - delta * 1.5);
@@ -4630,7 +5082,7 @@ function animate() {
 
   updateAudio(delta);
   applyDayNightVisuals();
-  updateCamera();
+  updateCamera(delta);
   renderer.render(scene, camera);
 }
 
@@ -4708,7 +5160,16 @@ if (import.meta.env.DEV) {
     audio,
     initAudio,
     setAudioVolume,
-    toggleAudioMute
+    toggleAudioMute,
+    setFirstPerson,
+    toggleCameraView,
+    updateCamera,
+    updateFpViewmodel,
+    flashOutline,
+    tapRaycaster,
+    resolveTapOwner,
+    TAP_REACH,
+    CAMERA_EYE_HEIGHT
   };
 }
 animate();
