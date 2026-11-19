@@ -712,7 +712,7 @@ for (let i = 0; i < 8; i += 1) {
 
 const plantedSaplings = [];
 const groundItems = [];
-const carriedItems = [];
+let heldItem = null;
 const berryBushes = [];
 const logGeometry = new THREE.CylinderGeometry(0.15, 0.17, 0.72, 7);
 const logMaterial = new THREE.MeshStandardMaterial({
@@ -1103,7 +1103,7 @@ const DUSK_LENGTH = 16;
 const DAWN_LENGTH = 14;
 const MAX_ENEMIES = 30;
 const PICKUP_RANGE = 3.35;
-const CARRY_LIMIT = 3;
+const CARRY_LIMIT = 1;
 const BACKPACK_CAPACITY = 20;
 const HUNGER_DRAIN_PER_SECOND = 0.42;
 const BERRY_HUNGER = 18;
@@ -1253,7 +1253,7 @@ function getInteractAction() {
   const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
   const closeItem = findNearestGroundItem(MACHINE_CLOSE_ITEM_RANGE);
   const fuelLow = state.fuel < 99.5;
-  const carriedFuel = carriedItems.some((item) => FIRE_FUEL_TYPES.has(item.type));
+  const carriedFuel = heldItem && FIRE_FUEL_TYPES.has(heldItem.type);
 
   const itemAction = (item) => ({
     type: 'pickup',
@@ -1273,7 +1273,7 @@ function getInteractAction() {
   if (nearbyItem) {
     return itemAction(nearbyItem);
   }
-  if (carriedItems.some((item) => item.type === 'sapling')) {
+  if (heldItem && heldItem.type === 'sapling') {
     return { type: 'plant', label: 'PLANT SAPLING' };
   }
   if (canMineTool(state.equippedTool) && state.targetRock) {
@@ -1462,15 +1462,13 @@ function spawnGroundItem(type, x, z, options = {}) {
 function removeGroundItem(item) {
   const itemIndex = groundItems.indexOf(item);
   if (itemIndex >= 0) groundItems.splice(itemIndex, 1);
-  const carriedIndex = carriedItems.indexOf(item);
-  if (carriedIndex >= 0) carriedItems.splice(carriedIndex, 1);
+  if (heldItem === item) heldItem = null;
   world.remove(item.mesh);
 }
 
 function popGroundItem(item) {
   if (!item || item.popping > 0) return;
-  const carriedIndex = carriedItems.indexOf(item);
-  if (carriedIndex >= 0) carriedItems.splice(carriedIndex, 1);
+  if (heldItem === item) heldItem = null;
   item.carried = false;
   item.popping = item.popDuration;
 }
@@ -1585,7 +1583,7 @@ function backpackFuelCount() {
 }
 
 function ownedCount(type) {
-  return state.backpack[type] + carriedItems.filter((item) => item.type === type).length;
+  return state.backpack[type] + (heldItem?.type === type ? 1 : 0);
 }
 
 function availableCount(type) {
@@ -1657,14 +1655,14 @@ function pickUpItem(item) {
   if (isBackpackEquipped()) {
     return addItemToBackpack(item);
   }
-  if (carriedItems.length >= CARRY_LIMIT) {
-    showToast('Hands full - 3 items max');
+  if (heldItem) {
+    showToast('Hands full');
     return false;
   }
   item.carried = true;
   item.landed = true;
   item.pickupDelay = 0;
-  carriedItems.push(item);
+  heldItem = item;
   updateHud();
   playPickupSound();
   showToast(`Picked up ${ITEM_NAMES[item.type]}`);
@@ -1675,26 +1673,23 @@ function dropCarriedItems() {
   if (!state.started || state.gameOver || state.falling || state.paused
     || state.machineOpen || state.settingsOpen || state.dropCooldown > 0) return;
 
-  if (carriedItems.length > 0) {
-    const items = carriedItems.splice(0, carriedItems.length);
-    for (let i = 0; i < items.length; i += 1) {
-      const item = items[i];
-      item.carried = false;
-      const angle = player.rotation.y + (i - (items.length - 1) / 2) * 0.5;
-      const distance = 1.15 + i * 0.15;
-      const x = player.position.x + Math.sin(angle) * distance;
-      const z = player.position.z + Math.cos(angle) * distance;
-      item.x = x;
-      item.z = z;
-      item.groundY = getGroundHeight(x, z);
-      item.velocityY = 1.3;
-      item.landed = false;
-      item.pickupDelay = 0.3;
-      item.mesh.position.set(x, player.position.y + 0.8, z);
-    }
+  if (heldItem) {
+    const item = heldItem;
+    heldItem = null;
+    item.carried = false;
+    const angle = player.rotation.y;
+    const x = player.position.x + Math.sin(angle) * 1.15;
+    const z = player.position.z + Math.cos(angle) * 1.15;
+    item.x = x;
+    item.z = z;
+    item.groundY = getGroundHeight(x, z);
+    item.velocityY = 1.3;
+    item.landed = false;
+    item.pickupDelay = 0.3;
+    item.mesh.position.set(x, player.position.y + 0.8, z);
     state.dropCooldown = 0.35;
     updateHud();
-    showToast(items.length === 1 ? 'Dropped item' : `Dropped ${items.length} items`);
+    showToast('Dropped item');
     return;
   }
 
