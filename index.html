@@ -7,8 +7,8 @@
     <meta name="description" content="99 Nights - low-poly survival in a dark forest" />
     <meta name="theme-color" content="#040b10" />
     <link rel="icon" href="data:," />
-    <script type="module" crossorigin src="./assets/index-D_OHflNE.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DPOjuNwe.css">
+    <script type="module" crossorigin src="./assets/index-OnuaMPIH.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BMBTJ0NO.css">
   </head>
   <body>
     <canvas id="game"></canvas>
@@ -56,7 +56,15 @@
       </div>
     </div>
 
-    <div id="audioControls" aria-label="Audio controls">
+    <div id="audioControls" aria-label="Game controls">
+      <button id="cameraBtn" class="audio-btn camera-btn" aria-label="Switch to first-person view" aria-pressed="false" title="Camera view">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="6.4" width="18" height="12.2" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <path d="M8.2 6.4 9.6 3.8h4.8l1.4 2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+          <circle cx="12" cy="12.6" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="12" cy="12.6" r="1.25" fill="currentColor" />
+        </svg>
+      </button>
       <button id="audioToggle" class="audio-btn" aria-label="Mute sound" aria-pressed="false">
         <svg class="audio-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 9.5v5h3.6L13 18.5v-13L7.6 9.5H4Z" fill="currentColor" />
