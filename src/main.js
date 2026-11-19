@@ -56,6 +56,7 @@ const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const volumeSlider = document.getElementById('volumeSlider');
 const volumeValue = document.getElementById('volumeValue');
+const invertHorizontalLook = document.getElementById('invertHorizontalLook');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -88,10 +89,11 @@ const FIRST_FOV = 75;
 const PITCH_LIMIT = THREE.MathUtils.degToRad(80);
 const CAMERA_LOOK_SENSITIVITY_X = 0.0037;
 const CAMERA_LOOK_SENSITIVITY_Y = 0.0022;
-const TAP_MAX_MOVE = 10;
-const TAP_MAX_TIME = 360;
 const TAP_REACH = 4;
 const CAMERA_VIEW_STORAGE_KEY = 'nights.cameraView';
+const INVERT_LOOK_STORAGE_KEY = 'nights.invertHorizontalLook';
+const TAP_MAX_MOVE = 15;
+const TAP_MAX_TIME = 300;
 
 // Gentle rolling ground keeps the campfire clearing flat while giving the player
 // broad, easy-to-climb slopes farther out in the forest.
@@ -1170,6 +1172,7 @@ const TOOL_STATS = {
 const TOOL_ORDER = ['axe', 'backpack', 'pickaxe', 'ironAxe', 'ironSword'];
 let interactPrompt = 'INTERACT';
 let toastTimer = 0;
+let touchDebugTimer = 0;
 let lastInventorySignature = '';
 
 
@@ -1250,6 +1253,12 @@ function showToast(message) {
   toastEl.textContent = message;
   toastEl.classList.add('visible');
   toastTimer = 1.5;
+}
+
+function showTouchDebug(label) {
+  toastEl.textContent = label;
+  toastEl.classList.add('visible');
+  touchDebugTimer = 3;
 }
 
 function createIronPieceMesh(scale = 1) {
@@ -2501,6 +2510,7 @@ const state = {
   pinchDistance: 0,
   cameraYaw: 0,
   cameraPitch: 0,
+  invertHorizontalLook: false,
   cameraDistance: THIRD_PERSON_DISTANCE,
   firstPerson: false,
   viewBlend: 0,
@@ -2550,8 +2560,9 @@ try {
     state.firstPerson = true;
     state.viewBlend = 1;
   }
+  state.invertHorizontalLook = window.localStorage.getItem(INVERT_LOOK_STORAGE_KEY) === 'true';
 } catch (error) {
-  // Storage can be blocked; third-person remains the default.
+  // Storage can be blocked; third-person and normal look remain the defaults.
 }
 
 function setFirstPerson(first, announce = true) {
@@ -2977,8 +2988,10 @@ window.addEventListener('pointermove', (event) => {
   if (!track.dragging && track.moved > TAP_MAX_MOVE) track.dragging = true;
   if (!track.dragging || !track.canLook || interactionBlocked()) return;
 
-  // Drag right = look right, drag up = look up.
-  state.cameraYaw += dx * CAMERA_LOOK_SENSITIVITY_X;
+  // Drag right = look right, drag left = look left. The setting reverses only
+  // the horizontal axis; both first-person and third-person views share this yaw.
+  const horizontalSign = state.invertHorizontalLook ? -1 : 1;
+  state.cameraYaw += dx * CAMERA_LOOK_SENSITIVITY_X * horizontalSign;
   state.cameraPitch = clamp(
     state.cameraPitch - dy * CAMERA_LOOK_SENSITIVITY_Y,
     -PITCH_LIMIT,
@@ -2991,9 +3004,13 @@ function endPointer(event) {
   if (!track) return;
   activePointers.delete(event.pointerId);
 
-  if (event.type === 'pointercancel') return;
-  if (track.dragging || track.moved > TAP_MAX_MOVE) return;
-  if (performance.now() - track.startTime > TAP_MAX_TIME) return;
+  const elapsed = performance.now() - track.startTime;
+  const isTap = !track.dragging
+    && track.moved <= TAP_MAX_MOVE
+    && elapsed <= TAP_MAX_TIME;
+
+  showTouchDebug(isTap ? 'TAP' : 'DRAG');
+  if (event.type === 'pointercancel' || !isTap) return;
   if (interactionBlocked()) return;
   handleWorldTap(track.startX, track.startY);
 }
@@ -3512,7 +3529,7 @@ function attack(targetEnemy = null) {
     const offset = enemy.position.clone().sub(player.position);
     offset.y = 0;
     const distance = offset.length();
-    if (distance > stats.range || distance < 0.01) continue;
+    if (distance > 3 || distance < 0.01) continue;
     offset.normalize();
     if (forward.dot(offset) < 0.2) continue;
     damageEnemy(enemy, stats, forward);
@@ -4793,6 +4810,16 @@ settingsBtn.addEventListener('pointerdown', (event) => {
   setSettingsOpen(!state.settingsOpen);
 });
 
+invertHorizontalLook.checked = state.invertHorizontalLook;
+invertHorizontalLook.addEventListener('change', () => {
+  state.invertHorizontalLook = invertHorizontalLook.checked;
+  try {
+    window.localStorage.setItem(INVERT_LOOK_STORAGE_KEY, String(state.invertHorizontalLook));
+  } catch (error) {
+    // Ignore storage failures.
+  }
+});
+
 closeSettingsBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   setSettingsOpen(false);
@@ -4855,7 +4882,12 @@ function animate() {
 
     if (toastTimer > 0) {
       toastTimer = Math.max(0, toastTimer - rawDelta);
-      if (toastTimer <= 0) toastEl.classList.remove('visible');
+      if (toastTimer <= 0 && touchDebugTimer <= 0) toastEl.classList.remove('visible');
+    }
+
+    if (touchDebugTimer > 0) {
+      touchDebugTimer = Math.max(0, touchDebugTimer - rawDelta);
+      if (touchDebugTimer <= 0) toastEl.classList.remove('visible');
     }
 
     if (state.started && !state.gameOver) {
