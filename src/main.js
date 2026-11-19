@@ -372,18 +372,17 @@ lantern.position.set(0.02, -0.68, 0.2);
 lantern.castShadow = true;
 rightArm.add(lantern);
 
-// A low-poly axe held in the right hand. It rides with the arm swing so the
-// whole character animates the strike instead of the axe floating separately.
+// Tool pivots sit at the fist so each model follows the right arm and its animations.
 const axe = new THREE.Group();
-axe.position.set(0.12, -0.62, 0.1);
+axe.position.set(0, -0.41, 0.01);
 axe.rotation.set(0.12, 0.08, -0.42);
-rightArm.add(axe);
+rightArmMesh.add(axe);
 
 const axeHandle = new THREE.Mesh(
   new THREE.CylinderGeometry(0.038, 0.048, 0.95, 6),
   new THREE.MeshStandardMaterial({ color: 0x7b4a27, roughness: 0.82, metalness: 0.02 })
 );
-axeHandle.position.y = 0.06;
+axeHandle.position.y = 0.475;
 axeHandle.castShadow = true;
 axe.add(axeHandle);
 
@@ -391,7 +390,7 @@ const axeGrip = new THREE.Mesh(
   new THREE.CylinderGeometry(0.052, 0.052, 0.22, 6),
   new THREE.MeshStandardMaterial({ color: 0x3b2413, roughness: 0.95 })
 );
-axeGrip.position.y = -0.3;
+axeGrip.position.y = 0;
 axeGrip.castShadow = true;
 axe.add(axeGrip);
 
@@ -405,7 +404,7 @@ const axeHead = new THREE.Mesh(
     metalness: 0.65
   })
 );
-axeHead.position.set(0.11, 0.42, 0);
+axeHead.position.set(0.11, 0.72, 0);
 axeHead.castShadow = true;
 axe.add(axeHead);
 
@@ -419,7 +418,7 @@ const axeBlade = new THREE.Mesh(
     metalness: 0.55
   })
 );
-axeBlade.position.set(0.27, 0.42, 0);
+axeBlade.position.set(0.27, 0.72, 0);
 axeBlade.castShadow = true;
 axe.add(axeBlade);
 axe.visible = false;
@@ -443,14 +442,14 @@ const brassToolMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b260, roug
 
 function addToolHandle(group, length, radius = 0.042) {
   const handle = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.2, length, 6), toolHandleMaterial);
-  handle.position.y = length * 0.06;
+  handle.position.y = length * 0.5;
   handle.castShadow = true;
   group.add(handle);
   const grip = new THREE.Mesh(
     new THREE.CylinderGeometry(radius * 1.28, radius * 1.28, 0.2, 6),
     new THREE.MeshStandardMaterial({ color: 0x362012, roughness: 0.95 })
   );
-  grip.position.y = -length * 0.37;
+  grip.position.y = 0;
   grip.castShadow = true;
   group.add(grip);
 }
@@ -460,18 +459,18 @@ function createHeldPickaxe() {
   addToolHandle(pickaxe, 0.92, 0.038);
 
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.13, 0.13), ironToolMaterial);
-  head.position.set(0.02, 0.42, 0);
+  head.position.set(0.02, 0.76, 0);
   head.castShadow = true;
   pickaxe.add(head);
 
   const tip = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.31, 4), ironEdgeMaterial);
-  tip.position.set(0.42, 0.42, 0);
+  tip.position.set(0.42, 0.76, 0);
   tip.rotation.z = -Math.PI / 2;
   tip.castShadow = true;
   pickaxe.add(tip);
 
   const backTip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.23, 4), ironToolMaterial);
-  backTip.position.set(-0.35, 0.42, 0);
+  backTip.position.set(-0.35, 0.76, 0);
   backTip.rotation.z = Math.PI / 2;
   backTip.castShadow = true;
   pickaxe.add(backTip);
@@ -484,12 +483,12 @@ function createHeldIronAxe() {
   addToolHandle(ironAxe, 0.96, 0.045);
 
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.11), ironToolMaterial);
-  head.position.set(0.11, 0.42, 0);
+  head.position.set(0.11, 0.775, 0);
   head.castShadow = true;
   ironAxe.add(head);
 
   const blade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.34, 0.075), ironEdgeMaterial);
-  blade.position.set(0.29, 0.42, 0);
+  blade.position.set(0.29, 0.775, 0);
   blade.rotation.z = -0.06;
   blade.castShadow = true;
   ironAxe.add(blade);
@@ -499,7 +498,7 @@ function createHeldIronAxe() {
     brassToolMaterial
   );
   rivet.rotation.x = Math.PI / 2;
-  rivet.position.set(0.11, 0.42, 0.04);
+  rivet.position.set(0.11, 0.775, 0.04);
   ironAxe.add(rivet);
 
   return ironAxe;
@@ -510,22 +509,22 @@ function createHeldIronSword() {
   addToolHandle(sword, 0.55, 0.035);
 
   const guard = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.11), brassToolMaterial);
-  guard.position.y = 0.18;
+  guard.position.y = 0.3835;
   guard.castShadow = true;
   sword.add(guard);
 
   const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.9, 0.055), ironEdgeMaterial);
-  blade.position.y = 0.68;
+  blade.position.y = 0.8835;
   blade.castShadow = true;
   sword.add(blade);
 
   const tip = new THREE.Mesh(new THREE.ConeGeometry(0.099, 0.24, 4), ironEdgeMaterial);
-  tip.position.y = 1.23;
+  tip.position.y = 1.4335;
   tip.castShadow = true;
   sword.add(tip);
 
   const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), brassToolMaterial);
-  pommel.position.y = -0.12;
+  pommel.position.y = 0.0835;
   sword.add(pommel);
 
   return sword;
@@ -539,12 +538,12 @@ for (const [tool, group, bob] of [
   ['ironAxe', heldIronAxe, 0.02],
   ['ironSword', heldIronSword, 0.08]
 ]) {
-  group.position.set(0.12, -0.62 + bob, 0.1);
-  group.rotation.set(0.12, 0.08, tool === 'ironSword' ? -0.1 : -0.38);
+  group.position.set(0, -0.41 + bob, 0.01);
+  group.rotation.set(1.15, 0, tool === 'ironSword' ? -0.02 : -0.06);
   group.visible = false;
   group.userData.baseY = group.position.y;
   group.userData.tool = tool;
-  rightArm.add(group);
+  rightArmMesh.add(group);
 }
 
 const backpackMat = new THREE.MeshStandardMaterial({ color: 0x7c4a2a, roughness: 0.78, metalness: 0.02 });
@@ -3319,12 +3318,10 @@ function handleWorldTap(clientX, clientY) {
 
   const hits = tapRaycaster.intersectObjects(world.children, true);
   for (const hit of hits) {
-    // Ignore non-mesh effects such as sparks and smoke. The first actual piece
-    // of world geometry decides whether this was an object interaction or an
-    // empty-space attack, so scenery cannot be clicked through accidentally.
     if (!hit.object.isMesh) continue;
     const owner = resolveTapOwner(hit.object);
     if (owner) applyTapInteraction(owner);
+    else attack();
     return;
   }
   attack();
@@ -3501,8 +3498,8 @@ function attack(targetEnemy = null) {
       targetEnemy.position.x - player.position.x,
       targetEnemy.position.z - player.position.z
     );
-  } else if (state.firstPerson) {
-    // In first-person, strikes follow where the camera looks.
+  } else {
+    // Empty-space strikes follow the shared camera yaw in either view.
     player.rotation.y = state.cameraYaw;
   }
 
