@@ -11,11 +11,7 @@ const joystickZone = document.getElementById('joystickZone');
 const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
 const lookZone = document.getElementById('lookZone');
-const attackBtn = document.getElementById('attackBtn');
-const attackLabel = document.getElementById('attackLabel');
 const jumpBtn = document.getElementById('jumpBtn');
-const interactBtn = document.getElementById('interactBtn');
-const interactLabel = document.getElementById('interactLabel');
 const dropBtn = document.getElementById('dropBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
@@ -638,8 +634,11 @@ const fpToolModels = {
   ironAxe: heldIronAxe.clone(true),
   ironSword: heldIronSword.clone(true)
 };
+const fpGripOffsets = { axe: 0.3, pickaxe: 0.34, ironAxe: 0.36, ironSword: 0.2 };
 for (const [key, model] of Object.entries(fpToolModels)) {
-  model.position.set(0, 0, 0);
+  // The tool model origin is at the hand mount; lift each tool so the bottom
+  // handle grip sits in the first-person hand instead of below it.
+  model.position.set(0, fpGripOffsets[key], 0);
   model.rotation.set(-0.15, 0.12, 0.26);
   model.scale.setScalar(0.9);
   model.visible = false;
@@ -1247,64 +1246,6 @@ function updateInteractionTarget() {
   }
 }
 
-function getInteractAction() {
-  if (!state.started || state.gameOver || state.falling || state.paused) return null;
-
-  const nearbyItem = findNearestGroundItem(PICKUP_RANGE);
-  const closeItem = findNearestGroundItem(MACHINE_CLOSE_ITEM_RANGE);
-  const fuelLow = state.fuel < 99.5;
-  const carriedFuel = heldItem && FIRE_FUEL_TYPES.has(heldItem.type);
-
-  const itemAction = (item) => ({
-    type: 'pickup',
-    label: isUpgradeType(item.type) ? 'COLLECT' : 'PICK UP',
-    item
-  });
-
-  if (state.fireInReach && carriedFuel && fuelLow && !state.machineInReach) {
-    return { type: 'fireThrow', label: 'THROW IN FIRE' };
-  }
-  if (closeItem) {
-    return itemAction(closeItem);
-  }
-  if (state.machineInReach) {
-    return { type: 'machine', label: 'USE MACHINE' };
-  }
-  if (nearbyItem) {
-    return itemAction(nearbyItem);
-  }
-  if (heldItem && heldItem.type === 'sapling') {
-    return { type: 'plant', label: 'PLANT SAPLING' };
-  }
-  if (canMineTool(state.equippedTool) && state.targetRock) {
-    return { type: 'mine', label: 'MINE IRON', rock: state.targetRock };
-  }
-  if (canChopTool(state.equippedTool) && state.targetTree) {
-    return { type: 'chop', label: 'CHOP', tree: state.targetTree };
-  }
-  if (state.fireInReach && backpackFuelCount() > 0) {
-    return { type: fuelLow ? 'fireFeed' : 'fireFull', label: fuelLow ? 'FEED FIRE' : 'FIRE FULL' };
-  }
-  if (state.fireInReach && carriedFuel) {
-    return { type: 'fireFull', label: 'FIRE FULL' };
-  }
-  return null;
-}
-
-function updateInteractPrompt() {
-  const action = getInteractAction();
-  const label = action ? action.label : 'INTERACT';
-
-  if (label !== interactPrompt) {
-    interactPrompt = label;
-    interactLabel.textContent = label;
-    const ready = !!action && action.type !== 'fireFull' && action.type !== 'machine';
-    const machineReady = !!action && action.type === 'machine';
-    interactBtn.classList.toggle('ready', ready);
-    interactBtn.classList.toggle('machine', machineReady);
-  }
-}
-
 function showToast(message) {
   toastEl.textContent = message;
   toastEl.classList.add('visible');
@@ -1550,11 +1491,16 @@ function spawnStarterIron() {
 }
 
 function resetGroundItems() {
-  for (const item of groundItems) world.remove(item.mesh);
+  for (const item of groundItems) {
+    item.carried = false;
+    item.popping = 0;
+    world.remove(item.mesh);
+  }
   groundItems.length = 0;
-  carriedItems.length = 0;
+  heldItem = null;
   regrowBerries();
   spawnStarterIron();
+  updateHud();
 }
 
 function findNearestGroundItem(range, filter = null) {
@@ -1671,55 +1617,34 @@ function pickUpItem(item) {
 
 function dropCarriedItems() {
   if (!state.started || state.gameOver || state.falling || state.paused
-    || state.machineOpen || state.settingsOpen || state.dropCooldown > 0) return;
+    || state.machineOpen || state.settingsOpen || state.dropCooldown > 0 || !heldItem) return;
 
-  if (heldItem) {
-    const item = heldItem;
-    heldItem = null;
-    item.carried = false;
-    const angle = player.rotation.y;
-    const x = player.position.x + Math.sin(angle) * 1.15;
-    const z = player.position.z + Math.cos(angle) * 1.15;
-    item.x = x;
-    item.z = z;
-    item.groundY = getGroundHeight(x, z);
-    item.velocityY = 1.3;
-    item.landed = false;
-    item.pickupDelay = 0.3;
-    item.mesh.position.set(x, player.position.y + 0.8, z);
-    state.dropCooldown = 0.35;
-    updateHud();
-    showToast('Dropped item');
-    return;
-  }
-
-  const type = ['wood', 'sapling', 'berry', 'iron'].find((candidate) => state.backpack[candidate] > 0);
-  if (!type) {
-    showToast('Nothing to drop');
-    return;
-  }
-
-  state.backpack[type] -= 1;
-  const x = player.position.x + Math.sin(player.rotation.y) * 1.35;
-  const z = player.position.z + Math.cos(player.rotation.y) * 1.35;
-  spawnGroundItem(type, x, z, { velocityY: 2.2, pickupDelay: 0.35 });
+  const item = heldItem;
+  heldItem = null;
+  item.carried = false;
+  const angle = player.rotation.y;
+  const x = player.position.x + Math.sin(angle) * 1.15;
+  const z = player.position.z + Math.cos(angle) * 1.15;
+  item.x = x;
+  item.z = z;
+  item.groundY = getGroundHeight(x, z);
+  item.velocityY = 1.3;
+  item.landed = false;
+  item.pickupDelay = 0.3;
+  item.mesh.position.set(x, player.position.y + 0.8, z);
   state.dropCooldown = 0.35;
   updateHud();
-  showToast(`Took out ${ITEM_NAMES[type].toLowerCase()}`);
+  showToast('Dropped item');
 }
 
 function throwCarriedIntoFire() {
-  const items = carriedItems.filter((item) => FIRE_FUEL_TYPES.has(item.type));
-  if (items.length === 0) return;
-  let fuel = 0;
-  for (const item of items) {
-    fuel += FUEL_VALUES[item.type] || 5;
-    popGroundItem(item);
-  }
+  if (!heldItem || !FIRE_FUEL_TYPES.has(heldItem.type)) return;
+  const item = heldItem;
+  const fuel = FUEL_VALUES[item.type] || 5;
+  popGroundItem(item);
   state.fuel = clamp(state.fuel + fuel, 0, 100);
   state.fireOut = false;
   state.fireFlare = 1;
-  state.interactCooldown = 0.45;
   updateHud();
   showToast(`Fire +${Math.round(fuel)}%`);
 }
@@ -1731,7 +1656,6 @@ function feedFireFromBackpack() {
   state.fuel = clamp(state.fuel + (FUEL_VALUES[type] || 5), 0, 100);
   state.fireOut = false;
   state.fireFlare = 1;
-  state.interactCooldown = 0.4;
   updateHud();
   showToast(`Fed the fire with ${ITEM_NAMES[type].toLowerCase()}`);
 }
@@ -1757,7 +1681,6 @@ function chopTree(tree, power = 1) {
   const data = tree.userData;
   data.shake = TREE_SHAKE_TIME;
   state.chopTimer = 0.3;
-  state.interactCooldown = 0.34;
   player.rotation.y = Math.atan2(
     tree.position.x - player.position.x,
     tree.position.z - player.position.z
@@ -1777,7 +1700,6 @@ function mineIronRock(rock, power = 1) {
 
   player.rotation.y = Math.atan2(rock.x - player.position.x, rock.z - player.position.z);
   state.chopTimer = 0.3;
-  state.interactCooldown = 0.34;
   rock.hits -= power;
   rock.shake = 0.3;
 
@@ -1866,9 +1788,8 @@ function spendResource(type, amount) {
   state.backpack[type] -= fromBackpack;
   remaining -= fromBackpack;
   while (remaining > 0) {
-    const carriedIndex = carriedItems.findIndex((item) => item.type === type);
-    if (carriedIndex < 0) break;
-    popGroundItem(carriedItems[carriedIndex]);
+    if (!heldItem || heldItem.type !== type) break;
+    popGroundItem(heldItem);
     remaining -= 1;
   }
   return amount - remaining;
@@ -2023,9 +1944,8 @@ function addMachineFuel() {
     state.backpack.wood -= 1;
     source = 'backpack';
   } else {
-    const carriedIndex = carriedItems.findIndex((item) => item.type === 'wood');
-    if (carriedIndex >= 0) {
-      popGroundItem(carriedItems[carriedIndex]);
+    if (heldItem && heldItem.type === 'wood') {
+      popGroundItem(heldItem);
       source = 'hands';
     } else {
       const nearbyWood = findNearestGroundItem(4.5, (item) => item.type === 'wood');
@@ -2141,46 +2061,6 @@ function updateMachine(delta) {
   if (state.machineOpen) updateMachinePanel();
 }
 
-// ---------- Interaction ----------
-
-function interact() {
-  if (!state.started || state.gameOver || state.falling || state.paused
-    || state.machineOpen || state.settingsOpen || state.interactCooldown > 0) return;
-
-  const action = getInteractAction();
-  if (!action) return;
-
-  switch (action.type) {
-    case 'fireThrow':
-      throwCarriedIntoFire();
-      break;
-    case 'pickup':
-      if (pickUpItem(action.item)) state.interactCooldown = 0.32;
-      break;
-    case 'machine':
-      openMachinePanel();
-      break;
-    case 'plant':
-      plantSapling();
-      break;
-    case 'mine':
-      mineIronRock(action.rock);
-      state.interactCooldown = 0.34;
-      break;
-    case 'chop':
-      chopTree(action.tree, TOOL_STATS[state.equippedTool]?.treePower ?? 1);
-      break;
-    case 'fireFeed':
-      feedFireFromBackpack();
-      break;
-    case 'fireFull':
-      showToast('The fire is already full');
-      break;
-    default:
-      break;
-  }
-}
-
 function updateGroundItems(delta) {
   const now = performance.now();
 
@@ -2197,14 +2077,16 @@ function updateGroundItems(delta) {
     }
 
     if (item.carried) {
-      const index = carriedItems.indexOf(item);
-      const spread = (index - (carriedItems.length - 1) / 2) * 0.62;
-      const angle = player.rotation.y + Math.PI + spread + Math.sin(now * 0.0012) * 0.05;
+      if (heldItem !== item) {
+        item.carried = false;
+        continue;
+      }
+      const angle = player.rotation.y + Math.PI + Math.sin(now * 0.0012) * 0.05;
       const distance = 0.95;
       const targetX = player.position.x + Math.sin(angle) * distance;
       const targetZ = player.position.z + Math.cos(angle) * distance;
-      const targetY = getGroundHeight(targetX, targetZ) + 0.52 + index * 0.06
-        + Math.sin(now * 0.003 + index) * 0.04;
+      const targetY = getGroundHeight(targetX, targetZ) + 0.52
+        + Math.sin(now * 0.003) * 0.04;
       const damping = 1 - Math.exp(-8 * delta);
       item.mesh.position.x += (targetX - item.mesh.position.x) * damping;
       item.mesh.position.y += (targetY - item.mesh.position.y) * damping;
@@ -2256,8 +2138,7 @@ function markChoppable(tree) {
 function plantSapling() {
   if (!state.started || state.gameOver || state.falling || state.paused
     || state.machineOpen || state.settingsOpen || state.plantCooldown > 0) return;
-  const carriedIndex = carriedItems.findIndex((item) => item.type === 'sapling');
-  if (carriedIndex < 0) {
+  if (!heldItem || heldItem.type !== 'sapling') {
     showToast('Carry a sapling to plant it');
     return;
   }
@@ -2270,7 +2151,7 @@ function plantSapling() {
     return;
   }
 
-  const item = carriedItems[carriedIndex];
+  const item = heldItem;
   removeGroundItem(item);
   state.plantCooldown = 0.45;
   const mesh = createSaplingMesh(0.35);
@@ -2653,7 +2534,6 @@ const state = {
   fireOut: false,
   fireFlare: 0,
   fireInReach: false,
-  interactCooldown: 0,
   chopTimer: 0,
   plantCooldown: 0,
   targetTree: null,
@@ -2730,6 +2610,8 @@ function updateHud() {
   hungerFill.style.width = `${hungerPercent}%`;
   hungerFill.classList.toggle('low', hungerPercent <= 30);
 
+  dropBtn.style.display = heldItem ? 'flex' : 'none';
+
   const fuel = clamp(state.fuel, 0, 100);
   const fuelPercent = Math.round(fuel);
   fuelFill.style.width = `${fuel}%`;
@@ -2777,17 +2659,6 @@ function updateToolUi() {
     slot.setAttribute('aria-pressed', String(equipped));
   }
 
-  const stats = TOOL_STATS[state.equippedTool];
-  const showAttack = !!stats && state.started && !state.gameOver && !state.falling
-    && !state.machineOpen && !state.settingsOpen && !state.inventoryOpen;
-  attackBtn.classList.toggle('visible', showAttack);
-  if (canMineTool(state.equippedTool) && state.targetRock) {
-    attackLabel.textContent = 'MINE';
-  } else if (canChopTool(state.equippedTool) && state.targetTree) {
-    attackLabel.textContent = 'CHOP';
-  } else {
-    attackLabel.textContent = 'ATTACK';
-  }
 }
 
 function renderInventory() {
@@ -3203,7 +3074,6 @@ function startGame() {
   state.fuel = 100;
   state.fireOut = false;
   state.fireFlare = 0;
-  state.interactCooldown = 0;
   state.chopTimer = 0;
   state.plantCooldown = 0;
   state.targetTree = null;
@@ -3281,8 +3151,6 @@ const jumpKeys = new Set(['shift', 'j']);
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   if (blockedKeys.has(key)) event.preventDefault();
-  if (key === ' ' && !event.repeat) attack();
-  if (key === 'e' && !event.repeat) interact();
   if (key === 'q' && !event.repeat) plantSapling();
   if (key === 'f' && !event.repeat) dropCarriedItems();
   if (key === '1' && !event.repeat) equipTool('axe');
@@ -3309,16 +3177,6 @@ window.addEventListener('keyup', (event) => {
 window.addEventListener('blur', () => {
   state.keys.clear();
   state.jumpHeld = false;
-});
-
-attackBtn.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  attack();
-});
-
-interactBtn.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  interact();
 });
 
 dropBtn.addEventListener('pointerdown', (event) => {
@@ -3442,37 +3300,17 @@ function handleWorldTap(clientX, clientY) {
   tapPointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
   tapRaycaster.setFromCamera(tapPointer, camera);
 
-  const candidates = [];
-  for (const item of groundItems) {
-    if (item.carried || item.popping > 0) continue;
-    candidates.push(item.mesh);
-  }
-  for (const rock of ironRocks) {
-    if (!rock.broken) candidates.push(rock.group);
-  }
-  for (const tree of treeData) {
-    if (tree.visible && tree.userData.choppable && !tree.userData.falling) candidates.push(tree);
-  }
-  for (const enemy of enemies) {
-    if (enemy.visible && !enemy.userData.fading && !enemy.userData.dead) candidates.push(enemy);
-  }
-  for (const sapling of plantedSaplings) candidates.push(sapling.mesh);
-  for (const bush of berryBushes) candidates.push(bush.mesh);
-  candidates.push(machine, campfire);
-
-  if (candidates.length === 0) return;
-
-  const hits = tapRaycaster.intersectObjects(candidates, true);
+  const hits = tapRaycaster.intersectObjects(world.children, true);
   for (const hit of hits) {
-    // Particle systems (sparks, smoke) can intersect anywhere along the ray and
-    // would otherwise swallow taps aimed at the world behind them.
+    // Ignore non-mesh effects such as sparks and smoke. The first actual piece
+    // of world geometry decides whether this was an object interaction or an
+    // empty-space attack, so scenery cannot be clicked through accidentally.
     if (!hit.object.isMesh) continue;
     const owner = resolveTapOwner(hit.object);
-    if (owner) {
-      applyTapInteraction(owner);
-      return;
-    }
+    if (owner) applyTapInteraction(owner);
+    return;
   }
+  attack();
 }
 
 function applyTapInteraction(owner) {
@@ -3572,8 +3410,8 @@ function harvestBerryBush(bush) {
     return;
   }
 
-  if (carriedItems.length >= CARRY_LIMIT) {
-    showToast('Hands full - 3 items max');
+  if (heldItem) {
+    showToast('Hands full');
     return;
   }
   const item = spawnGroundItem('berry', player.position.x, player.position.z, {
@@ -3585,7 +3423,7 @@ function harvestBerryBush(bush) {
 }
 
 function tapCampfire() {
-  const carriedFuel = carriedItems.some((item) => FIRE_FUEL_TYPES.has(item.type));
+  const carriedFuel = heldItem && FIRE_FUEL_TYPES.has(heldItem.type);
   if (carriedFuel) {
     throwCarriedIntoFire();
     return;
@@ -3639,10 +3477,7 @@ function attack(targetEnemy = null) {
   if (!state.started || state.gameOver || state.falling || state.paused || state.machineOpen || state.settingsOpen) return;
   if (state.attackCooldown > 0) return;
   const stats = TOOL_STATS[state.equippedTool];
-  if (!stats) {
-    showToast(state.equippedTool === 'backpack' ? 'Unequip the backpack to fight' : 'Equip a tool to attack');
-    return;
-  }
+  if (!['axe', 'ironAxe', 'ironSword'].includes(state.equippedTool) || !stats) return;
 
   if (targetEnemy) {
     player.rotation.y = Math.atan2(
@@ -3660,14 +3495,6 @@ function attack(targetEnemy = null) {
   strikeArc.scale.setScalar(0.7);
   playerGlow.intensity = 1.8;
   playAxeWhoosh();
-
-  if (!targetEnemy) {
-    if (state.targetRock && stats.rockPower > 0) {
-      mineIronRock(state.targetRock, stats.rockPower);
-    } else if (state.targetTree && stats.treePower > 0) {
-      chopTree(state.targetTree, stats.treePower);
-    }
-  }
 
   const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
 
@@ -5002,7 +4829,6 @@ function animate() {
   if (!portrait) {
     state.attackCooldown = Math.max(0, state.attackCooldown - delta);
     state.attackTimer = Math.max(0, state.attackTimer - delta);
-    state.interactCooldown = Math.max(0, state.interactCooldown - delta);
     state.chopTimer = Math.max(0, state.chopTimer - delta);
     state.plantCooldown = Math.max(0, state.plantCooldown - delta);
     state.dropCooldown = Math.max(0, state.dropCooldown - delta);
@@ -5051,14 +4877,12 @@ function animate() {
       updateMachine(delta);
       updateIronRocks(delta);
       updateHud();
-      updateInteractPrompt();
     } else {
       state.moveSpeed = 0;
       updatePlayerVertical(delta);
       updateInteractionTarget();
       updateTrees(delta);
       updateGroundItems(delta);
-      updateInteractPrompt();
       updateHud();
     }
 
@@ -5104,7 +4928,6 @@ if (import.meta.env.DEV) {
     lantern,
     treeData,
     groundItems,
-    carriedItems,
     berryBushes,
     plantedSaplings,
     spawnGroundItem,
@@ -5115,7 +4938,6 @@ if (import.meta.env.DEV) {
     spawnNightWave,
     startEnemyFade,
     plantSapling,
-    interact,
     attack,
     dropCarriedItems,
     pickUpItem,
