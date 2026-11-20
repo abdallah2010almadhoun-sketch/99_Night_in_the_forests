@@ -13,6 +13,7 @@ const joystickKnob = document.getElementById('joystickKnob');
 const lookZone = document.getElementById('lookZone');
 const jumpBtn = document.getElementById('jumpBtn');
 const dropBtn = document.getElementById('dropBtn');
+const plantBtn = document.getElementById('plantBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
 const berryText = document.getElementById('berryText');
@@ -2509,7 +2510,7 @@ const state = {
   pinchDistance: 0,
   cameraYaw: 0,
   cameraPitch: 0,
-  invertHorizontalLook: false,
+  invertHorizontalLook: true,
   cameraDistance: THIRD_PERSON_DISTANCE,
   firstPerson: false,
   viewBlend: 0,
@@ -2559,9 +2560,10 @@ try {
     state.firstPerson = true;
     state.viewBlend = 1;
   }
-  state.invertHorizontalLook = window.localStorage.getItem(INVERT_LOOK_STORAGE_KEY) === 'true';
+  // Invert horizontal look is on by default and only off when saved explicitly.
+  state.invertHorizontalLook = window.localStorage.getItem(INVERT_LOOK_STORAGE_KEY) !== 'false';
 } catch (error) {
-  // Storage can be blocked; third-person and normal look remain the defaults.
+  // Storage can be blocked; third-person and the default look remain.
 }
 
 function setFirstPerson(first, announce = true) {
@@ -2621,6 +2623,7 @@ function updateHud() {
   hungerFill.classList.toggle('low', hungerPercent <= 30);
 
   dropBtn.style.display = heldItem ? 'flex' : 'none';
+  plantBtn.style.display = heldItem && heldItem.type === 'sapling' ? 'flex' : 'none';
 
   const fuel = clamp(state.fuel, 0, 100);
   const fuelPercent = Math.round(fuel);
@@ -2987,9 +2990,9 @@ window.addEventListener('pointermove', (event) => {
   if (!track.dragging && track.moved > TAP_MAX_MOVE) track.dragging = true;
   if (!track.dragging || !track.canLook || interactionBlocked()) return;
 
-  // Drag right = look right, drag left = look left. The setting reverses only
-  // the horizontal axis; both first-person and third-person views share this yaw.
-  const horizontalSign = state.invertHorizontalLook ? -1 : 1;
+  // Drag right = look right, drag left = look left. Both first-person and
+  // third-person views share this yaw; the setting flips only the horizontal axis.
+  const horizontalSign = state.invertHorizontalLook ? 1 : -1;
   state.cameraYaw += dx * CAMERA_LOOK_SENSITIVITY_X * horizontalSign;
   state.cameraPitch = clamp(
     state.cameraPitch - dy * CAMERA_LOOK_SENSITIVITY_Y,
@@ -3198,6 +3201,11 @@ window.addEventListener('blur', () => {
 dropBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   dropCarriedItems();
+});
+
+plantBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  plantSapling();
 });
 
 axeSlot.addEventListener('pointerdown', (event) => {

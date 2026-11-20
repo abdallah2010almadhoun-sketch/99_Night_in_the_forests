@@ -521,6 +521,15 @@ button {
   background: radial-gradient(circle at 34% 28%, rgba(62, 82, 90, 0.58), rgba(10, 21, 26, 0.7));
 }
 
+#plantBtn {
+  right: 126px;
+  bottom: 16px;
+  width: 60px;
+  height: 60px;
+  border-color: rgba(150, 226, 167, 0.5);
+  background: radial-gradient(circle at 34% 28%, rgba(66, 158, 98, 0.55), rgba(11, 38, 24, 0.7));
+}
+
 /* ---------- Hotbar ---------- */
 
 #hotbar {
@@ -1018,6 +1027,14 @@ button {
     font-size: 9px;
   }
 
+  #plantBtn {
+    right: 110px;
+    bottom: 12px;
+    width: 53px;
+    height: 53px;
+    font-size: 9px;
+  }
+
   #hotbar {
     gap: 8px;
     padding: 5px;
@@ -1106,6 +1123,14 @@ button {
   #dropBtn {
     right: 101px;
     bottom: 66px;
+    width: 48px;
+    height: 48px;
+    font-size: 8px;
+  }
+
+  #plantBtn {
+    right: 101px;
+    bottom: 10px;
     width: 48px;
     height: 48px;
     font-size: 8px;
