@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const canvas = document.getElementById('game');
+const hud = document.getElementById('hud');
 const nightText = document.getElementById('nightText');
 const phaseIcon = document.getElementById('phaseIcon');
 const healthText = document.getElementById('healthText');
@@ -23,6 +24,7 @@ const fuelFill = document.getElementById('fuelFill');
 const hungerText = document.getElementById('hungerText');
 const hungerFill = document.getElementById('hungerFill');
 const fireWarning = document.getElementById('fireWarning');
+const touchDebugEl = document.getElementById('touchDebug');
 const deathBanner = document.getElementById('deathBanner');
 const toastEl = document.getElementById('toast');
 const darkness = document.getElementById('darkness');
@@ -1256,9 +1258,9 @@ function showToast(message) {
 }
 
 function showTouchDebug(label) {
-  toastEl.textContent = label;
-  toastEl.classList.add('visible');
-  touchDebugTimer = 3;
+  touchDebugEl.textContent = label;
+  touchDebugEl.classList.add('visible');
+  touchDebugTimer = 2;
 }
 
 function createIronPieceMesh(scale = 1) {
@@ -2474,6 +2476,8 @@ const smokeMaterial = new THREE.MeshBasicMaterial({ color: 0x9ca9a2, transparent
 for (let i = 0; i < 4; i += 1) {
   const puff = new THREE.Mesh(new THREE.SphereGeometry(0.11 + i * 0.015, 6, 6), smokeMaterial.clone());
   puff.position.y = 1.55 + i * 0.42;
+  // Smoke is nearly invisible decoration; it must not swallow taps meant for empty space.
+  puff.userData.tapIgnore = true;
   campfire.add(puff);
   smokePuffs.push(puff);
 }
@@ -2952,6 +2956,13 @@ function isUiTarget(target) {
   ));
 }
 
+function isOverHud(clientX, clientY) {
+  if (!hud) return false;
+  const rect = hud.getBoundingClientRect();
+  return clientX >= rect.left && clientX <= rect.right
+    && clientY >= rect.top && clientY <= rect.bottom;
+}
+
 function interactionBlocked() {
   return !state.started || state.gameOver || state.falling || state.portrait
     || state.inventoryOpen || state.machineOpen || state.settingsOpen;
@@ -2959,7 +2970,7 @@ function interactionBlocked() {
 
 window.addEventListener('pointerdown', (event) => {
   if (event.pointerType === 'mouse' && event.button !== 0) return;
-  if (isUiTarget(event.target)) return;
+  if (isUiTarget(event.target) || isOverHud(event.clientX, event.clientY)) return;
   if (!state.started || state.gameOver || state.falling || state.portrait) return;
 
   activePointers.set(event.pointerId, {
@@ -3326,10 +3337,16 @@ function handleWorldTap(clientX, clientY) {
 
   const hits = tapRaycaster.intersectObjects(world.children, true);
   for (const hit of hits) {
-    if (!hit.object.isMesh) continue;
+    if (!hit.object.isMesh || hit.object.userData.tapIgnore) continue;
     const owner = resolveTapOwner(hit.object);
-    if (owner) applyTapInteraction(owner);
-    else attack();
+    if (!owner) break;
+    if (owner.kind === 'enemy') {
+      applyTapInteraction(owner);
+      return;
+    }
+    // A short tap always swings the held tool, even when the ray lands on scenery.
+    attack();
+    applyTapInteraction(owner);
     return;
   }
   attack();
@@ -4887,12 +4904,12 @@ function animate() {
 
     if (toastTimer > 0) {
       toastTimer = Math.max(0, toastTimer - rawDelta);
-      if (toastTimer <= 0 && touchDebugTimer <= 0) toastEl.classList.remove('visible');
+      if (toastTimer <= 0) toastEl.classList.remove('visible');
     }
 
     if (touchDebugTimer > 0) {
       touchDebugTimer = Math.max(0, touchDebugTimer - rawDelta);
-      if (touchDebugTimer <= 0) toastEl.classList.remove('visible');
+      if (touchDebugTimer <= 0) touchDebugEl.classList.remove('visible');
     }
 
     if (state.started && !state.gameOver) {
