@@ -7,8 +7,8 @@
     <meta name="description" content="99 Nights - low-poly survival in a dark forest" />
     <meta name="theme-color" content="#040b10" />
     <link rel="icon" href="data:," />
-    <script type="module" crossorigin src="./assets/index-BgptsJJH.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BwDFjbgW.css">
+    <script type="module" crossorigin src="./assets/index-C20bwgVU.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Bylm-R-b.css">
   </head>
   <body>
     <canvas id="game"></canvas>
@@ -104,6 +104,7 @@
       <span>The dark takes you back to the fire...</span>
     </div>
     <div id="toast" aria-live="polite"></div>
+    <div id="touchDebug" aria-hidden="true"></div>
 
     <div id="joystickZone" aria-label="Move joystick">
       <div id="joystickBase">
@@ -112,6 +113,10 @@
     </div>
 
     <div id="actionCluster" aria-label="Action buttons">
+      <button id="plantBtn" class="action-btn" aria-label="Plant a sapling" style="display: none">
+        <span>PLANT</span>
+        <small>Q</small>
+      </button>
       <button id="dropBtn" class="action-btn" aria-label="Drop items">
         <span>DROP</span>
         <small>F</small>
