@@ -1095,7 +1095,8 @@ const FUEL_DRAIN_PER_SECOND = 0.8;
 const LOG_FUEL_VALUE = 25;
 const TREE_SHAKE_TIME = 0.36;
 const TREE_FALL_TIME = 1.15;
-const SAPLING_GROW_TIME = 45;
+const SAPLING_GROW_TIME = 120;
+const SAPLING_STAGE_SCALES = [0.35, 0.58, 0.82, 1.06];
 const ATTACK_DURATION = 0.34;
 const FIRE_SCARE_RADIUS = 6;
 const FIRE_STRONG_FUEL = 50;
@@ -2187,7 +2188,14 @@ function updatePlantedSaplings(delta) {
     const sapling = plantedSaplings[i];
     sapling.growth += delta;
     const ratio = clamp(sapling.growth / SAPLING_GROW_TIME, 0, 1);
-    const scale = 0.35 + ratio * ratio * 0.95;
+    // Growth happens in four visible stages across the two-minute lifecycle.
+    const stage = Math.min(
+      SAPLING_STAGE_SCALES.length - 1,
+      Math.floor(ratio * SAPLING_STAGE_SCALES.length)
+    );
+    const targetScale = SAPLING_STAGE_SCALES[stage];
+    const growRate = 1 - Math.exp(-6 * delta);
+    const scale = sapling.mesh.scale.x + (targetScale - sapling.mesh.scale.x) * growRate;
     sapling.mesh.scale.setScalar(scale);
     sapling.mesh.rotation.z = Math.sin(performance.now() * 0.0016 + sapling.sway) * 0.035;
 
