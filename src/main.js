@@ -99,16 +99,20 @@ const TAP_MAX_MOVE = 15;
 const TAP_MAX_TIME = 300;
 
 // ---------- Third-person armed pose ----------
-// The whole right arm is raised forward ~70 degrees, with a small wrist/elbow
-// bend so the fist ends up in front of the chest, a little to the right.
-const ARMED_ARM_RAISE = -1.22;
-const ARMED_ARM_OUT = 0.08;
+// The shoulder pose is pure pitch about the arm's left-right (local X) axis:
+// the arm swings forward in the direction the character faces, never sideways.
+// A small wrist/elbow bend tips the fist forward so it sits in front of the
+// chest, a little to the right.
+const ARMED_ARM_RAISE = -1.05;
 const ARMED_ELBOW_BEND = -0.34;
-const ARMED_HANDLE_PITCH = 1.22;
-// Cancels the arm + elbow rotation so the handle ends up 20 degrees above
-// horizontal, pointing forward, with the head at the far top end.
+// Handle angle measured from vertical: 75 deg = 15 deg above horizontal.
+const ARMED_HANDLE_PITCH = 1.309;
+// Cancels the arm + elbow pitch so the handle points where the face looks.
 const ARMED_TOOL_PITCH = ARMED_HANDLE_PITCH - (ARMED_ARM_RAISE + ARMED_ELBOW_BEND);
-const ARMED_WALK_FACTOR = 0.36;
+// Roll the tool about its own handle so the head stays in the forward plane
+// instead of jutting out to the character's side.
+const ARMED_TOOL_ROLL = -Math.PI / 2;
+const ARMED_WALK_FACTOR = 0.34;
 
 // Gentle rolling ground keeps the campfire clearing flat while giving the player
 // broad, easy-to-climb slopes farther out in the forest.
@@ -397,7 +401,7 @@ rightArm.add(lantern);
 // Tool pivots sit at the fist so each model follows the right arm and its animations.
 const axe = new THREE.Group();
 axe.position.set(0, 0, 0);
-axe.rotation.set(ARMED_TOOL_PITCH, 0, 0);
+axe.rotation.set(ARMED_TOOL_PITCH, ARMED_TOOL_ROLL, 0);
 rightHandPivot.add(axe);
 
 const axeHandle = new THREE.Mesh(
@@ -561,7 +565,7 @@ for (const [tool, group] of [
   ['ironSword', heldIronSword]
 ]) {
   group.position.set(0, 0, 0);
-  group.rotation.set(ARMED_TOOL_PITCH, 0, 0);
+  group.rotation.set(ARMED_TOOL_PITCH, ARMED_TOOL_ROLL, 0);
   group.visible = false;
   group.userData.baseY = group.position.y;
   group.userData.tool = tool;
@@ -3899,8 +3903,8 @@ function updateAvatar(delta) {
       rightArmZ = 1.35;
     }
     if (armed) {
-      rightArmX = ARMED_ARM_RAISE + (state.velocityY > 0.25 ? -0.18 : 0.12);
-      rightArmZ = ARMED_ARM_OUT;
+      rightArmX = ARMED_ARM_RAISE + (state.velocityY > 0.25 ? -0.12 : 0.08);
+      rightArmZ = 0;
     }
     leftLegX = 0.12;
     rightLegX = -0.12;
@@ -3910,7 +3914,6 @@ function updateAvatar(delta) {
     leftArmX = 0.22 * swing;
     if (armed) {
       rightArmX = ARMED_ARM_RAISE + armedSwingAngle(progress);
-      rightArmZ = ARMED_ARM_OUT + 0.1 * swing;
     } else {
       rightArmX = -0.45 - 2.25 * swing;
       rightArmZ = 0.34 * swing;
@@ -3923,7 +3926,6 @@ function updateAvatar(delta) {
     leftArmX = -0.4 * swing;
     if (armed) {
       rightArmX = ARMED_ARM_RAISE + armedSwingAngle(progress);
-      rightArmZ = ARMED_ARM_OUT + 0.08 * swing;
     } else {
       rightArmX = -2.2 * swing;
       rightArmZ = 0.12 * swing;
@@ -3932,8 +3934,7 @@ function updateAvatar(delta) {
     const progress = 1 - state.equipTimer / EQUIP_TIME;
     const lift = Math.sin(clamp(progress, 0, 1) * Math.PI);
     if (armed) {
-      rightArmX = ARMED_ARM_RAISE - 0.45 * lift;
-      rightArmZ = ARMED_ARM_OUT + 0.12 * lift;
+      rightArmX = ARMED_ARM_RAISE - 0.2 * lift;
     } else {
       rightArmX = -1.15 * lift;
       rightArmZ = 0.22 * lift;
@@ -3944,7 +3945,6 @@ function updateAvatar(delta) {
     const swing = Math.sin(state.walkPhase) * 0.72;
     leftArmX = swing;
     rightArmX = armed ? ARMED_ARM_RAISE - swing * ARMED_WALK_FACTOR : -swing;
-    if (armed) rightArmZ = ARMED_ARM_OUT;
     leftLegX = -swing;
     rightLegX = swing;
   } else {
@@ -3952,7 +3952,6 @@ function updateAvatar(delta) {
     leftArmX = sway;
     if (armed) {
       rightArmX = ARMED_ARM_RAISE - sway * 0.4;
-      rightArmZ = ARMED_ARM_OUT;
     } else {
       rightArmX = -sway;
     }
