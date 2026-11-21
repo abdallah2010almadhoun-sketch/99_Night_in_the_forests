@@ -98,6 +98,18 @@ const INVERT_LOOK_STORAGE_KEY = 'nights.invertHorizontalLook';
 const TAP_MAX_MOVE = 15;
 const TAP_MAX_TIME = 300;
 
+// ---------- Third-person armed pose ----------
+// The whole right arm is raised forward ~70 degrees, with a small wrist/elbow
+// bend so the fist ends up in front of the chest, a little to the right.
+const ARMED_ARM_RAISE = -1.22;
+const ARMED_ARM_OUT = 0.08;
+const ARMED_ELBOW_BEND = -0.34;
+const ARMED_HANDLE_PITCH = 1.22;
+// Cancels the arm + elbow rotation so the handle ends up 20 degrees above
+// horizontal, pointing forward, with the head at the far top end.
+const ARMED_TOOL_PITCH = ARMED_HANDLE_PITCH - (ARMED_ARM_RAISE + ARMED_ELBOW_BEND);
+const ARMED_WALK_FACTOR = 0.36;
+
 // Gentle rolling ground keeps the campfire clearing flat while giving the player
 // broad, easy-to-climb slopes farther out in the forest.
 function getGroundHeight(x, z) {
@@ -350,8 +362,15 @@ const rightArmMesh = makeAvatarPart(0.22, 0.78, 0.3, skinMaterial, 0.06);
 rightArmMesh.position.y = -0.39;
 rightArm.add(rightArmMesh);
 const rightHand = makeAvatarPart(0.2, 0.16, 0.26, skinMaterial, 0.05);
-rightHand.position.set(0, -0.8, 0.01);
-rightArm.add(rightHand);
+rightHand.position.set(0, 0, 0);
+// The fist pivot sits exactly at the fist centre (0.41 below the arm mesh
+// centre) and hangs off the arm mesh, so the hand and every tool follow the
+// right arm while the grip stays in the palm.
+const rightHandPivot = new THREE.Group();
+rightHandPivot.position.set(0, -0.41, 0.01);
+rightHandPivot.rotation.set(ARMED_ELBOW_BEND, 0, 0);
+rightArmMesh.add(rightHandPivot);
+rightHandPivot.add(rightHand);
 
 const leftLeg = new THREE.Group();
 leftLeg.position.set(-0.2, 0.84, 0);
@@ -377,9 +396,9 @@ rightArm.add(lantern);
 
 // Tool pivots sit at the fist so each model follows the right arm and its animations.
 const axe = new THREE.Group();
-axe.position.set(0, -0.41, 0.01);
-axe.rotation.set(0.12, 0.08, -0.42);
-rightArmMesh.add(axe);
+axe.position.set(0, 0, 0);
+axe.rotation.set(ARMED_TOOL_PITCH, 0, 0);
+rightHandPivot.add(axe);
 
 const axeHandle = new THREE.Mesh(
   new THREE.CylinderGeometry(0.038, 0.048, 0.95, 6),
@@ -536,17 +555,17 @@ function createHeldIronSword() {
 const heldPickaxe = createHeldPickaxe();
 const heldIronAxe = createHeldIronAxe();
 const heldIronSword = createHeldIronSword();
-for (const [tool, group, bob] of [
-  ['pickaxe', heldPickaxe, 0.04],
-  ['ironAxe', heldIronAxe, 0.02],
-  ['ironSword', heldIronSword, 0.08]
+for (const [tool, group] of [
+  ['pickaxe', heldPickaxe],
+  ['ironAxe', heldIronAxe],
+  ['ironSword', heldIronSword]
 ]) {
-  group.position.set(0, -0.41 + bob, 0.01);
-  group.rotation.set(1.15, 0, tool === 'ironSword' ? -0.02 : -0.06);
+  group.position.set(0, 0, 0);
+  group.rotation.set(ARMED_TOOL_PITCH, 0, 0);
   group.visible = false;
   group.userData.baseY = group.position.y;
   group.userData.tool = tool;
-  rightArmMesh.add(group);
+  rightHandPivot.add(group);
 }
 
 const backpackMat = new THREE.MeshStandardMaterial({ color: 0x7c4a2a, roughness: 0.78, metalness: 0.02 });
@@ -3840,8 +3859,25 @@ function movePlayer(delta) {
   player.position.z = clamp(player.position.z, -30, 30);
 }
 
+// A two-phase chop: lift the arm up from the armed pose, then bring the tool
+// down in front of the character before easing back to the pose.
+function armedSwingAngle(progress) {
+  const p = clamp(progress, 0, 1);
+  if (p < 0.35) {
+    const t = p / 0.35;
+    return -1.05 * (t * t * (3 - 2 * t));
+  }
+  if (p < 0.72) {
+    const t = (p - 0.35) / 0.37;
+    return -1.05 + 1.85 * (t * t * (3 - 2 * t));
+  }
+  const t = (p - 0.72) / 0.28;
+  return 0.8 - 0.8 * (t * t * (3 - 2 * t));
+}
+
 function updateAvatar(delta) {
   state.idleTime += delta;
+  const armed = isToolType(state.equippedTool);
 
   let leftArmX = 0;
   let rightArmX = 0;
@@ -3862,39 +3898,64 @@ function updateAvatar(delta) {
       leftArmZ = -1.35;
       rightArmZ = 1.35;
     }
+    if (armed) {
+      rightArmX = ARMED_ARM_RAISE + (state.velocityY > 0.25 ? -0.18 : 0.12);
+      rightArmZ = ARMED_ARM_OUT;
+    }
     leftLegX = 0.12;
     rightLegX = -0.12;
   } else if (state.attackTimer > 0) {
     const progress = 1 - state.attackTimer / ATTACK_DURATION;
     const swing = Math.sin(clamp(progress, 0, 1) * Math.PI);
     leftArmX = 0.22 * swing;
-    rightArmX = -0.45 - 2.25 * swing;
-    rightArmZ = 0.34 * swing;
+    if (armed) {
+      rightArmX = ARMED_ARM_RAISE + armedSwingAngle(progress);
+      rightArmZ = ARMED_ARM_OUT + 0.1 * swing;
+    } else {
+      rightArmX = -0.45 - 2.25 * swing;
+      rightArmZ = 0.34 * swing;
+    }
     leftLegX = 0.08 * swing;
     rightLegX = -0.08 * swing;
   } else if (state.chopTimer > 0) {
     const progress = 1 - state.chopTimer / 0.3;
     const swing = Math.sin(clamp(progress, 0, 1) * Math.PI);
     leftArmX = -0.4 * swing;
-    rightArmX = -2.2 * swing;
-    rightArmZ = 0.12 * swing;
+    if (armed) {
+      rightArmX = ARMED_ARM_RAISE + armedSwingAngle(progress);
+      rightArmZ = ARMED_ARM_OUT + 0.08 * swing;
+    } else {
+      rightArmX = -2.2 * swing;
+      rightArmZ = 0.12 * swing;
+    }
   } else if (state.equipTimer > 0) {
     const progress = 1 - state.equipTimer / EQUIP_TIME;
     const lift = Math.sin(clamp(progress, 0, 1) * Math.PI);
-    rightArmX = -1.15 * lift;
-    rightArmZ = 0.22 * lift;
+    if (armed) {
+      rightArmX = ARMED_ARM_RAISE - 0.45 * lift;
+      rightArmZ = ARMED_ARM_OUT + 0.12 * lift;
+    } else {
+      rightArmX = -1.15 * lift;
+      rightArmZ = 0.22 * lift;
+    }
     leftArmX = 0.18 * lift;
   } else if (state.moveSpeed > 0.1) {
     state.walkPhase += delta * (5 + state.moveSpeed);
     const swing = Math.sin(state.walkPhase) * 0.72;
     leftArmX = swing;
-    rightArmX = -swing;
+    rightArmX = armed ? ARMED_ARM_RAISE - swing * ARMED_WALK_FACTOR : -swing;
+    if (armed) rightArmZ = ARMED_ARM_OUT;
     leftLegX = -swing;
     rightLegX = swing;
   } else {
     const sway = Math.sin(state.idleTime * 1.9) * 0.05;
     leftArmX = sway;
-    rightArmX = -sway;
+    if (armed) {
+      rightArmX = ARMED_ARM_RAISE - sway * 0.4;
+      rightArmZ = ARMED_ARM_OUT;
+    } else {
+      rightArmX = -sway;
+    }
   }
 
   const damping = 1 - Math.exp(-14 * delta);
