@@ -103,6 +103,12 @@
       <span>The dark takes you back to the fire...</span>
     </div>
     <div id="toast" aria-live="polite"></div>
+    <div id="hitMeter" aria-hidden="true">
+      <span id="hitMeterText">0/13</span>
+      <div class="hit-meter-track">
+        <div id="hitMeterFill" class="hit-meter-fill"></div>
+      </div>
+    </div>
     <div id="touchDebug" aria-hidden="true"></div>
 
     <div id="joystickZone" aria-label="Move joystick">
@@ -112,6 +118,9 @@
     </div>
 
     <div id="actionCluster" aria-label="Action buttons">
+      <button id="chopBtn" class="action-btn" aria-label="Swing at the nearest tree or rock">
+        <span>CHOP</span>
+      </button>
       <button id="plantBtn" class="action-btn" aria-label="Plant a sapling" style="display: none">
         <span>PLANT</span>
         <small>Q</small>

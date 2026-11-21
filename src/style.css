@@ -414,6 +414,52 @@ button {
   transform: translate(-50%, 0);
 }
 
+#hitMeter {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 26;
+  width: 92px;
+  padding: 4px 6px 5px;
+  border: 1px solid rgba(255, 205, 130, 0.4);
+  border-radius: 9px;
+  background: rgba(5, 14, 18, 0.8);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  transition: opacity 0.15s ease;
+}
+
+#hitMeter.visible {
+  opacity: 1;
+}
+
+#hitMeterText {
+  display: block;
+  margin-bottom: 3px;
+  color: #ffd79a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.hit-meter-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.hit-meter-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c9812f, #ffcf76);
+  transition: width 0.12s ease;
+}
+
 #touchDebug {
   position: fixed;
   left: 50%;
@@ -550,6 +596,16 @@ button {
   height: 60px;
   border-color: rgba(150, 226, 167, 0.5);
   background: radial-gradient(circle at 34% 28%, rgba(66, 158, 98, 0.55), rgba(11, 38, 24, 0.7));
+}
+
+#chopBtn {
+  right: 4px;
+  bottom: 96px;
+  width: 64px;
+  height: 64px;
+  border-color: rgba(255, 198, 112, 0.5);
+  background: radial-gradient(circle at 34% 28%, rgba(160, 108, 48, 0.6), rgba(35, 22, 10, 0.72));
+  box-shadow: 0 0 20px rgba(226, 158, 74, 0.18), inset 0 1px rgba(255, 255, 255, 0.18);
 }
 
 /* ---------- Hotbar ---------- */
@@ -1054,6 +1110,14 @@ button {
     bottom: 12px;
     width: 53px;
     height: 53px;
+    font-size: 9px;
+  }
+
+  #chopBtn {
+    right: 3px;
+    bottom: 84px;
+    width: 56px;
+    height: 56px;
     font-size: 9px;
   }
 

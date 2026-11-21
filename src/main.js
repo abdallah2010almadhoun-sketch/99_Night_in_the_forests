@@ -15,6 +15,7 @@ const lookZone = document.getElementById('lookZone');
 const jumpBtn = document.getElementById('jumpBtn');
 const dropBtn = document.getElementById('dropBtn');
 const plantBtn = document.getElementById('plantBtn');
+const chopBtn = document.getElementById('chopBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
 const berryText = document.getElementById('berryText');
@@ -27,6 +28,9 @@ const fireWarning = document.getElementById('fireWarning');
 const touchDebugEl = document.getElementById('touchDebug');
 const deathBanner = document.getElementById('deathBanner');
 const toastEl = document.getElementById('toast');
+const hitMeterEl = document.getElementById('hitMeter');
+const hitMeterText = document.getElementById('hitMeterText');
+const hitMeterFill = document.getElementById('hitMeterFill');
 const darkness = document.getElementById('darkness');
 const overlay = document.getElementById('startOverlay');
 const startBtn = document.getElementById('startBtn');
@@ -79,9 +83,13 @@ const world = new THREE.Group();
 scene.add(world);
 
 const MACHINE_POSITION = new THREE.Vector3(3.4, 0, -1);
-const IRON_ROCK_HITS = 2;
+const IRON_ROCK_HITS = 13;
 const solidProps = [];
-const TREE_HITS_BASE = 3;
+const TREE_HITS_BASE = 13;
+// One hit per swing: resource damage is gated by a short cooldown of its own so
+// rapid taps cannot stack several hits into the same arm swing.
+const RESOURCE_SWING_COOLDOWN = 0.5;
+const HIT_METER_HIDE_TIME = 5;
 
 // ---------- Camera / view constants ----------
 const CAMERA_EYE_HEIGHT = 1.6;
@@ -1281,6 +1289,73 @@ function showToast(message) {
   toastTimer = 1.5;
 }
 
+// ---------- Resource hit meter ----------
+// One small bar follows the tree or rock most recently hit. It shows how many
+// of the required hits landed and hides after five seconds without a new hit.
+const hitMeterState = { kind: null, target: null, timer: 0 };
+const hitMeterAnchor = new THREE.Vector3();
+
+function hideHitMeter() {
+  hitMeterState.kind = null;
+  hitMeterState.target = null;
+  hitMeterState.timer = 0;
+  hitMeterEl.classList.remove('visible');
+}
+
+function registerResourceHit(kind, target) {
+  const data = kind === 'tree' ? target.userData : target;
+  const total = data.hitsMax || (kind === 'tree' ? TREE_HITS_BASE : IRON_ROCK_HITS);
+  const done = clamp(total - Math.max(0, data.hits), 0, total);
+  hitMeterState.kind = kind;
+  hitMeterState.target = target;
+  hitMeterState.timer = HIT_METER_HIDE_TIME;
+  hitMeterText.textContent = `${done}/${total}`;
+  hitMeterFill.style.width = `${(done / total) * 100}%`;
+  hitMeterEl.classList.add('visible');
+}
+
+function updateHitMeter(delta) {
+  const { kind, target } = hitMeterState;
+  if (!target) return;
+  if (!state.started || state.gameOver || state.falling > 0) {
+    hideHitMeter();
+    return;
+  }
+  if (kind === 'tree') {
+    if (!target.visible || target.userData.falling || !target.userData.choppable) {
+      hideHitMeter();
+      return;
+    }
+  } else if (target.broken) {
+    hideHitMeter();
+    return;
+  }
+
+  hitMeterState.timer -= delta;
+  if (hitMeterState.timer <= 0) {
+    hideHitMeter();
+    return;
+  }
+
+  if (kind === 'tree') {
+    const scale = target.userData.scale || 1;
+    hitMeterAnchor.set(target.position.x, target.position.y + 2.7 * scale, target.position.z);
+  } else {
+    hitMeterAnchor.set(target.x, getGroundHeight(target.x, target.z) + 1.5 * target.scale, target.z);
+  }
+  hitMeterAnchor.project(camera);
+  if (hitMeterAnchor.z > 1) {
+    hitMeterEl.classList.remove('visible');
+    return;
+  }
+
+  const px = clamp((hitMeterAnchor.x * 0.5 + 0.5) * window.innerWidth, 54, window.innerWidth - 54);
+  const py = Math.max(112, (-hitMeterAnchor.y * 0.5 + 0.5) * window.innerHeight);
+  hitMeterEl.style.left = `${px}px`;
+  hitMeterEl.style.top = `${py}px`;
+  hitMeterEl.classList.add('visible');
+}
+
 function showTouchDebug(label) {
   touchDebugEl.textContent = label;
   touchDebugEl.classList.add('visible');
@@ -1713,7 +1788,9 @@ function fellTree(tree) {
 }
 
 function chopTree(tree, power = 1) {
+  if (!tree || state.swingCooldown > 0) return;
   const data = tree.userData;
+  state.swingCooldown = RESOURCE_SWING_COOLDOWN;
   data.shake = TREE_SHAKE_TIME;
   state.chopTimer = 0.3;
   player.rotation.y = Math.atan2(
@@ -1723,30 +1800,34 @@ function chopTree(tree, power = 1) {
 
   data.hits -= power;
   playTreeThud();
-  if (data.hits <= 0) fellTree(tree);
+  registerResourceHit('tree', tree);
+  if (data.hits <= 0) {
+    fellTree(tree);
+    hideHitMeter();
+  }
 }
 
 function mineIronRock(rock, power = 1) {
-  if (!rock || rock.broken) return;
+  if (!rock || rock.broken || state.swingCooldown > 0) return;
   if (!canMineTool(state.equippedTool)) {
-    showToast('Equip the pickaxe to mine iron');
+    showToast('Use the Pickaxe');
     return;
   }
 
+  state.swingCooldown = RESOURCE_SWING_COOLDOWN;
   player.rotation.y = Math.atan2(rock.x - player.position.x, rock.z - player.position.z);
   state.chopTimer = 0.3;
   rock.hits -= power;
   rock.shake = 0.3;
+  playRockClink();
+  registerResourceHit('rock', rock);
 
-  if (rock.hits > 0) {
-    playRockClink();
-    showToast('The rock cracks');
-    return;
-  }
+  if (rock.hits > 0) return;
 
   rock.broken = true;
   rock.regrow = IRON_REGROW_MIN + Math.random() * (IRON_REGROW_MAX - IRON_REGROW_MIN);
   rock.group.visible = false;
+  hideHitMeter();
   playRockBreak();
 
   const dropCount = 2 + Math.floor(Math.random() * 2);
@@ -2581,6 +2662,7 @@ const state = {
   fireInReach: false,
   chopTimer: 0,
   plantCooldown: 0,
+  swingCooldown: 0,
   targetTree: null,
   targetRock: null,
   falling: 0,
@@ -3102,6 +3184,7 @@ function startGame() {
   state.nightActive = false;
   state.attackCooldown = 0;
   state.attackTimer = 0;
+  state.swingCooldown = 0;
   state.damageFlash = 0;
   state.nearFire = true;
   state.keys.clear();
@@ -3143,6 +3226,7 @@ function startGame() {
   state.hitEffectTimer = 0;
   toastTimer = 0;
   toastEl.classList.remove('visible');
+  hideHitMeter();
   setInventoryOpen(false);
   closeMachinePanel();
   setSettingsOpen(false);
@@ -3248,6 +3332,11 @@ dropBtn.addEventListener('pointerdown', (event) => {
 plantBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   plantSapling();
+});
+
+chopBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  swingAtNearestResource();
 });
 
 axeSlot.addEventListener('pointerdown', (event) => {
@@ -3402,7 +3491,7 @@ function applyTapInteraction(owner) {
       if (!withinReach(rock.x, rock.z)) return tooFar();
       flashOutline(rock.group);
       if (!canMineTool(state.equippedTool)) {
-        showToast('Equip the pickaxe to mine iron');
+        showToast('Use the Pickaxe');
         return;
       }
       mineIronRock(rock);
@@ -3413,7 +3502,7 @@ function applyTapInteraction(owner) {
       if (!withinReach(tree.position.x, tree.position.z)) return tooFar();
       flashOutline(tree);
       if (!canChopTool(state.equippedTool)) {
-        showToast('Equip the axe to chop');
+        showToast('Use the Axe');
         return;
       }
       chopTree(tree, TOOL_STATS[state.equippedTool]?.treePower ?? 1);
@@ -3458,6 +3547,47 @@ function applyTapInteraction(owner) {
     default:
       break;
   }
+}
+
+// The Chop button swings at the nearest tree or rock the player is facing.
+function swingAtNearestResource() {
+  if (interactionBlocked()) return;
+  const fx = Math.sin(state.cameraYaw);
+  const fz = Math.cos(state.cameraYaw);
+  let best = null;
+  const consider = (kind, x, z, ref) => {
+    const dx = x - player.position.x;
+    const dz = z - player.position.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 0.001 || distance > TAP_REACH) return;
+    if ((dx * fx + dz * fz) / distance < 0.15) return;
+    if (!best || distance < best.distance) best = { kind, ref, distance };
+  };
+  for (const tree of treeData) {
+    if (!tree.userData.choppable || tree.userData.falling || !tree.visible) continue;
+    consider('tree', tree.position.x, tree.position.z, tree);
+  }
+  for (const rock of ironRocks) {
+    if (rock.broken) continue;
+    consider('rock', rock.x, rock.z, rock);
+  }
+  if (!best) {
+    showToast('Nothing to chop');
+    return;
+  }
+  if (best.kind === 'tree') {
+    if (!canChopTool(state.equippedTool)) {
+      showToast('Use the Axe');
+      return;
+    }
+    chopTree(best.ref, TOOL_STATS[state.equippedTool]?.treePower ?? 1);
+    return;
+  }
+  if (!canMineTool(state.equippedTool)) {
+    showToast('Use the Pickaxe');
+    return;
+  }
+  mineIronRock(best.ref);
 }
 
 function harvestBerryBush(bush) {
@@ -3654,6 +3784,7 @@ function respawnAtCamp() {
   state.grounded = true;
   state.attackCooldown = 0;
   state.attackTimer = 0;
+  state.swingCooldown = 0;
   player.position.set(0, getGroundHeight(0, 3.6), 3.6);
   player.rotation.y = 0;
   leftArm.rotation.set(0, 0, 0);
@@ -3661,6 +3792,7 @@ function respawnAtCamp() {
   leftLeg.rotation.set(0, 0, 0);
   rightLeg.rotation.set(0, 0, 0);
   deathBanner.classList.remove('visible');
+  hideHitMeter();
 
   state.cycleTime = DAY_LENGTH;
   state.nightActive = true;
@@ -4947,6 +5079,7 @@ function animate() {
     state.attackCooldown = Math.max(0, state.attackCooldown - delta);
     state.attackTimer = Math.max(0, state.attackTimer - delta);
     state.chopTimer = Math.max(0, state.chopTimer - delta);
+    state.swingCooldown = Math.max(0, state.swingCooldown - delta);
     state.plantCooldown = Math.max(0, state.plantCooldown - delta);
     state.dropCooldown = Math.max(0, state.dropCooldown - delta);
     state.invuln = Math.max(0, state.invuln - delta);
@@ -5024,6 +5157,7 @@ function animate() {
   updateAudio(delta);
   applyDayNightVisuals();
   updateCamera(delta);
+  updateHitMeter(delta);
   renderer.render(scene, camera);
 }
 
