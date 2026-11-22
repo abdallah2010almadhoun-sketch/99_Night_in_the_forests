@@ -90,7 +90,6 @@ const clock = new THREE.Clock();
 const world = new THREE.Group();
 scene.add(world);
 
-const MACHINE_POSITION = new THREE.Vector3(3.4, 0, -1);
 const BENCH_POSITION = new THREE.Vector3(4.2, 0, 4.2);
 const GRINDER_POSITION = new THREE.Vector3(6.5, 0, 2.6);
 const IRON_ROCK_HITS = 13;
@@ -160,14 +159,21 @@ const campfire = new THREE.Group();
 campfire.userData.campfireRef = true;
 world.add(campfire);
 
-const campfireBase = new THREE.Mesh(
-  new THREE.CylinderGeometry(1.1, 1.5, 0.45, 8),
-  new THREE.MeshStandardMaterial({ color: 0x36261e, roughness: 0.9 })
+const campfireVisual = new THREE.Group();
+campfire.add(campfireVisual);
+
+const emberBed = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.74, 0.92, 0.12, 12),
+  new THREE.MeshStandardMaterial({
+    color: 0x2a1b14,
+    emissive: 0x7a2c08,
+    emissiveIntensity: 0.55,
+    roughness: 1
+  })
 );
-campfireBase.position.y = 0.2;
-campfireBase.castShadow = true;
-campfireBase.receiveShadow = true;
-campfire.add(campfireBase);
+emberBed.position.y = 0.06;
+emberBed.receiveShadow = true;
+campfire.add(emberBed);
 
 const fireCore = new THREE.Mesh(
   new THREE.SphereGeometry(0.22, 10, 10),
@@ -572,11 +578,37 @@ function createHeldIronSword() {
   return sword;
 }
 
+function createHeldTorch() {
+  const torch = new THREE.Group();
+  addToolHandle(torch, 0.52, 0.036);
+  const wrap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.075, 0.06, 0.18, 7),
+    new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.95 })
+  );
+  wrap.position.y = 0.5;
+  torch.add(wrap);
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.11, 0.3, 6),
+    new THREE.MeshBasicMaterial({
+      color: 0xffa53a,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  flame.position.y = 0.72;
+  torch.add(flame);
+  return torch;
+}
+
 const heldPickaxe = createHeldPickaxe();
 const heldIronAxe = createHeldIronAxe();
 const heldIronSword = createHeldIronSword();
+const heldTorch = createHeldTorch();
 for (const [tool, group] of [
   ['pickaxe', heldPickaxe],
+  ['torch', heldTorch],
   ['ironAxe', heldIronAxe],
   ['ironSword', heldIronSword]
 ]) {
@@ -674,10 +706,11 @@ fpArmPivot.add(fpToolMount);
 const fpToolModels = {
   axe: axe.clone(true),
   pickaxe: heldPickaxe.clone(true),
+  torch: heldTorch.clone(true),
   ironAxe: heldIronAxe.clone(true),
   ironSword: heldIronSword.clone(true)
 };
-const fpGripOffsets = { axe: 0.3, pickaxe: 0.34, ironAxe: 0.36, ironSword: 0.2 };
+const fpGripOffsets = { axe: 0.3, pickaxe: 0.34, torch: 0.2, ironAxe: 0.36, ironSword: 0.2 };
 for (const [key, model] of Object.entries(fpToolModels)) {
   // The tool model origin is at the hand mount; lift each tool so the bottom
   // handle grip sits in the first-person hand instead of below it.
@@ -939,137 +972,310 @@ for (const [clusterX, clusterZ] of rockClusters) {
   }
 }
 
-// ---------- Upgrade machine ----------
+// ---------- Crafting bench & grinder ----------
 
-const machine = new THREE.Group();
-const machineParts = {};
-const machineSmokePuffs = [];
-const machineGears = [];
+const bench = new THREE.Group();
+const benchParts = {};
+const benchTier2Group = new THREE.Group();
+const benchTier3Group = new THREE.Group();
 
-const machineBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x66757d, emissive: 0x172126, emissiveIntensity: 0.32, roughness: 0.46, metalness: 0.5 });
-const machineDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x3d4a51, emissive: 0x101a1e, emissiveIntensity: 0.3, roughness: 0.5, metalness: 0.48 });
-const machineWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x835427, emissive: 0x241204, emissiveIntensity: 0.28, roughness: 0.84, metalness: 0.03 });
-const machineWoodDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x5d381a, emissive: 0x1b0e04, emissiveIntensity: 0.25, roughness: 0.9 });
-const machinePanelMaterial = new THREE.MeshStandardMaterial({
-  color: 0x332013,
-  emissive: 0xff7a1d,
-  emissiveIntensity: 0.7,
-  roughness: 0.4,
-  metalness: 0.25
-});
+const benchWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x8a5a2e, roughness: 0.85, metalness: 0.04 });
+const benchWoodDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3a1d, roughness: 0.9 });
+const benchMetalMaterial = new THREE.MeshStandardMaterial({ color: 0x8d9aa1, roughness: 0.4, metalness: 0.68 });
+const benchMetalDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x566169, roughness: 0.46, metalness: 0.6 });
 
-{
-  const body = new THREE.Mesh(new RoundedBoxGeometry(1.5, 1.4, 1.14, 2, 0.07), machineBodyMaterial);
-  body.position.y = 0.85;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  machine.add(body);
+function drawStockSign(kind, value, bright) {
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 192;
+  canvasEl.height = 112;
+  const g = canvasEl.getContext('2d');
 
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.22, 1.3), machineDarkMaterial);
-  base.position.y = 0.12;
-  base.castShadow = true;
-  base.receiveShadow = true;
-  machine.add(base);
+  const paint = (amount) => {
+    g.clearRect(0, 0, 192, 112);
+    g.fillStyle = kind === 'wood' ? '#6b4322' : '#545d63';
+    g.fillRect(0, 0, 192, 112);
+    g.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    g.lineWidth = 8;
+    g.strokeRect(4, 4, 184, 104);
+    g.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    g.fillRect(6, 6, 180, 18);
 
-  const rim = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.1, 1.2), machineDarkMaterial);
-  rim.position.y = 1.56;
-  rim.castShadow = true;
-  machine.add(rim);
+    if (kind === 'wood') {
+      g.fillStyle = '#d79a58';
+      g.fillRect(18, 44, 52, 26);
+      g.fillStyle = '#b87a3d';
+      g.beginPath();
+      g.arc(18, 57, 13, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#8a5526';
+      g.lineWidth = 3;
+      g.beginPath();
+      g.arc(18, 57, 6, 0, Math.PI * 2);
+      g.stroke();
+    } else {
+      g.fillStyle = '#dfe9ee';
+      g.beginPath();
+      g.moveTo(46, 36);
+      g.lineTo(24, 60);
+      g.lineTo(40, 60);
+      g.lineTo(32, 82);
+      g.lineTo(56, 54);
+      g.lineTo(40, 54);
+      g.closePath();
+      g.fill();
+    }
 
-  const hopper = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.34, 0.68, 4), machineWoodMaterial);
-  hopper.position.y = 1.88;
-  hopper.rotation.y = Math.PI / 4;
-  hopper.castShadow = true;
-  hopper.receiveShadow = true;
-  machine.add(hopper);
+    g.fillStyle = bright ? '#fff6cf' : '#ffe1a8';
+    g.font = 'bold 58px system-ui, sans-serif';
+    g.textAlign = 'right';
+    g.textBaseline = 'middle';
+    g.fillText(String(amount), 176, 62);
+  };
 
-  const hopperRim = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.1, 0.98), machineWoodDarkMaterial);
-  hopperRim.position.y = 2.22;
-  hopperRim.rotation.y = Math.PI / 4;
-  hopperRim.castShadow = true;
-  machine.add(hopperRim);
-
-  const hopperHole = new THREE.Mesh(
-    new THREE.BoxGeometry(0.66, 0.03, 0.66),
-    new THREE.MeshStandardMaterial({ color: 0x120d08, roughness: 1 })
-  );
-  hopperHole.position.y = 2.27;
-  hopperHole.rotation.y = Math.PI / 4;
-  machine.add(hopperHole);
-
-  const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.86, 6), machineDarkMaterial);
-  chimney.position.set(0.66, 2.4, -0.4);
-  chimney.castShadow = true;
-  machine.add(chimney);
-
-  const chimneyCap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.13, 0.12, 6), machineBodyMaterial);
-  chimneyCap.position.set(0.66, 2.86, -0.4);
-  chimneyCap.castShadow = true;
-  machine.add(chimneyCap);
-
-  const panelBack = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.66, 0.08), machineDarkMaterial);
-  panelBack.position.set(0, 0.9, 0.59);
-  machine.add(panelBack);
-
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.5, 0.045), machinePanelMaterial);
-  panel.position.set(0, 0.9, 0.64);
-  machine.add(panel);
-
-  for (const side of [-1, 1]) {
-    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.075, 6), machineBodyMaterial);
-    bolt.rotation.x = Math.PI / 2;
-    bolt.position.set(side * 0.28, 1.18, 0.665);
-    machine.add(bolt);
-    const boltLow = bolt.clone();
-    boltLow.position.y = 0.62;
-    machine.add(boltLow);
-  }
-
-  for (const [index, side] of [[0, -1], [1, 1]]) {
-    const gear = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 8), machineBodyMaterial);
-    gear.rotation.z = Math.PI / 2;
-    gear.position.set(side * 0.8, 0.72 + index * 0.32, 0.12);
-    gear.castShadow = true;
-    machine.add(gear);
-    machineGears.push(gear);
-  }
-
-  const glow = new THREE.PointLight(0xff8b2e, 0.95, 8.5, 2);
-  glow.position.set(0, 1.2, 0.95);
-  machine.add(glow);
-
-  for (let i = 0; i < 6; i += 1) {
-    const puff = new THREE.Mesh(
-      new THREE.SphereGeometry(0.1 + i * 0.012, 5, 4),
-      new THREE.MeshBasicMaterial({ color: 0xc4cfcb, transparent: true, opacity: 0, depthWrite: false })
-    );
-    puff.position.set(0.66, 2.98 + i * 0.28, -0.4);
-    machine.add(puff);
-    machineSmokePuffs.push(puff);
-  }
-
-  machineParts.body = body;
-  machineParts.panel = panel;
-  machineParts.glow = glow;
-  machineParts.hopper = hopper;
+  paint(value);
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return {
+    mesh: null,
+    pop: 0,
+    setValue(amount, bright) {
+      paint(amount);
+      texture.needsUpdate = true;
+      if (this.mesh) this.pop = 1;
+    },
+    texture
+  };
 }
 
-machine.position.set(MACHINE_POSITION.x, getGroundHeight(MACHINE_POSITION.x, MACHINE_POSITION.z), MACHINE_POSITION.z);
-machine.rotation.y = -1.28;
-machine.traverse((part) => { part.userData.machineRef = true; });
-world.add(machine);
-solidProps.push({ x: MACHINE_POSITION.x, z: MACHINE_POSITION.z, radius: 0.96, type: 'machine' });
+function createBenchSign(kind, x, bright) {
+  const sign = drawStockSign(kind, 0, bright);
+  const material = new THREE.MeshBasicMaterial({ map: sign.texture, transparent: true });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.42), material);
+  mesh.position.set(x, 0.66, 0.515);
+  sign.mesh = mesh;
+  return sign;
+}
 
-const machineState = {
-  fuel: 0,
-  working: null,
-  progress: 0,
-  stalled: false,
-  statusTimer: 0,
-  smokeTimer: 0,
-  gearAngle: 0,
-  clankTimer: 0
+{
+  const tabletop = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.17, 1.0), benchWoodMaterial);
+  tabletop.position.y = 0.94;
+  tabletop.castShadow = true;
+  tabletop.receiveShadow = true;
+  bench.add(tabletop);
+
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.16, 0.16), benchWoodDarkMaterial);
+  apron.position.set(0, 0.8, 0.42);
+  bench.add(apron);
+  const apronBack = apron.clone();
+  apronBack.position.z = -0.42;
+  bench.add(apronBack);
+
+  for (const [lx, lz] of [[-1.08, -0.36], [1.08, -0.36], [-1.08, 0.36], [1.08, 0.36]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.92, 0.2), benchWoodDarkMaterial);
+    leg.position.set(lx, 0.46, lz);
+    leg.castShadow = true;
+    bench.add(leg);
+
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.28), benchMetalMaterial);
+    bracket.position.set(lx * 0.94, 0.86, lz * 0.94);
+    bracket.castShadow = true;
+    bench.add(bracket);
+    const bracketLow = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.24), benchMetalDarkMaterial);
+    bracketLow.position.set(lx * 0.94, 0.14, lz * 0.94);
+    bench.add(bracketLow);
+  }
+
+  const brace = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.78), benchWoodDarkMaterial);
+  brace.position.set(0, 0.42, 0);
+  bench.add(brace);
+
+  const hammerHandle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.62), benchWoodMaterial);
+  hammerHandle.position.set(-0.72, 1.05, 0.02);
+  hammerHandle.rotation.y = 0.36;
+  bench.add(hammerHandle);
+  const hammerHead = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.13, 0.14), benchMetalDarkMaterial);
+  hammerHead.position.set(-0.55, 1.07, -0.16);
+  hammerHead.rotation.y = 0.36;
+  hammerHead.castShadow = true;
+  bench.add(hammerHead);
+
+  const sawBlade = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.035, 0.2), benchMetalMaterial);
+  sawBlade.position.set(0.62, 1.05, -0.12);
+  sawBlade.rotation.y = -0.22;
+  bench.add(sawBlade);
+  const sawHandle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.09, 0.15), benchWoodDarkMaterial);
+  sawHandle.position.set(1.14, 1.06, -0.02);
+  sawHandle.rotation.y = -0.22;
+  bench.add(sawHandle);
+  for (let i = 0; i < 7; i += 1) {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 3), benchMetalMaterial);
+    tooth.position.set(0.62 + (i - 3) * 0.11, 1.02, -0.22);
+    tooth.rotation.x = Math.PI / 2;
+    bench.add(tooth);
+  }
+
+  benchParts.woodSign = createBenchSign('wood', -0.62, false);
+  benchParts.ironSign = createBenchSign('iron', 0.62, false);
+  bench.add(benchParts.woodSign.mesh);
+  bench.add(benchParts.ironSign.mesh);
+
+  {
+    const viseBase = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.28), benchMetalDarkMaterial);
+    viseBase.position.set(-1.06, 1.1, 0.22);
+    benchTier2Group.add(viseBase);
+    const viseJaw = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.08), benchMetalMaterial);
+    viseJaw.position.set(-1.06, 1.18, 0.34);
+    benchTier2Group.add(viseJaw);
+    const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6), benchMetalMaterial);
+    screw.rotation.z = Math.PI / 2;
+    screw.position.set(-1.06, 1.1, 0.44);
+    benchTier2Group.add(screw);
+
+    const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.55, 6), benchMetalDarkMaterial);
+    lampPost.position.set(1.2, 1.72, -0.42);
+    benchTier2Group.add(lampPost);
+    const lampArm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.06), benchMetalDarkMaterial);
+    lampArm.position.set(0.98, 2.46, -0.42);
+    benchTier2Group.add(lampArm);
+    const lamp = new THREE.Mesh(
+      new THREE.ConeGeometry(0.18, 0.22, 8),
+      new THREE.MeshStandardMaterial({ color: 0x3a2b1a, emissive: 0xffb04a, emissiveIntensity: 0.55, roughness: 0.6 })
+    );
+    lamp.position.set(0.74, 2.34, -0.42);
+    benchTier2Group.add(lamp);
+    const lampLight = new THREE.PointLight(0xffbe6a, 0.9, 5.5, 2);
+    lampLight.position.set(0.74, 2.2, -0.42);
+    benchTier2Group.add(lampLight);
+  }
+
+  {
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 1.5, 6), benchMetalDarkMaterial);
+      post.position.set(side * 1.05, 1.7, -0.72);
+      benchTier3Group.add(post);
+    }
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.08), benchMetalMaterial);
+    rail.position.set(0, 2.38, -0.72);
+    benchTier3Group.add(rail);
+    for (let i = 0; i < 4; i += 1) {
+      const hook = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), benchMetalMaterial);
+      hook.position.set(-0.75 + i * 0.5, 2.26, -0.72);
+      benchTier3Group.add(hook);
+      const tool = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.12), benchMetalDarkMaterial);
+      tool.position.set(-0.75 + i * 0.5, 1.98, -0.72);
+      benchTier3Group.add(tool);
+    }
+  }
+
+  benchTier2Group.visible = false;
+  benchTier3Group.visible = false;
+  bench.add(benchTier2Group, benchTier3Group);
+
+  const hitbox = new THREE.Mesh(
+    new THREE.BoxGeometry(2.8, 2.2, 1.5),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false })
+  );
+  hitbox.position.y = 1.1;
+  bench.add(hitbox);
+}
+
+bench.position.set(BENCH_POSITION.x, getGroundHeight(BENCH_POSITION.x, BENCH_POSITION.z), BENCH_POSITION.z);
+bench.rotation.y = Math.atan2(-BENCH_POSITION.x, -BENCH_POSITION.z);
+bench.userData.benchRef = true;
+world.add(bench);
+solidProps.push({ x: BENCH_POSITION.x, z: BENCH_POSITION.z, radius: 1.32, type: 'bench' });
+
+const grinder = new THREE.Group();
+const grinderParts = {};
+{
+  const redMaterial = new THREE.MeshStandardMaterial({ color: 0x9b2f2a, roughness: 0.62, metalness: 0.18 });
+  const redDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x6c1d1a, roughness: 0.7, metalness: 0.15 });
+  const hopperMaterial = new THREE.MeshStandardMaterial({ color: 0x7d8a91, roughness: 0.4, metalness: 0.72, side: THREE.DoubleSide });
+
+  const base = new THREE.Mesh(new RoundedBoxGeometry(1.18, 0.28, 0.86, 2, 0.05), redMaterial);
+  base.position.y = 0.3;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  grinder.add(base);
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.08, 0.72), redDarkMaterial);
+  deck.position.y = 0.48;
+  grinder.add(deck);
+
+  grinderParts.wheels = [];
+  for (const [wx, wz] of [[-0.45, -0.33], [0.45, -0.33], [-0.45, 0.33], [0.45, 0.33]]) {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.1, 10), benchMetalDarkMaterial);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(wx, 0.16, wz);
+    wheel.castShadow = true;
+    grinder.add(wheel);
+    grinderParts.wheels.push(wheel);
+  }
+
+  const shakeGroup = new THREE.Group();
+  grinder.add(shakeGroup);
+  grinderParts.shakeGroup = shakeGroup;
+
+  const hopper = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.66, 0.34, 0.88, 4, 1, true),
+    hopperMaterial
+  );
+  hopper.position.y = 1.02;
+  hopper.rotation.y = Math.PI / 4;
+  hopper.castShadow = true;
+  shakeGroup.add(hopper);
+  grinderParts.hopper = hopper;
+
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.09, 0.98), benchMetalDarkMaterial);
+  rim.position.y = 1.46;
+  rim.rotation.y = Math.PI / 4;
+  rim.castShadow = true;
+  shakeGroup.add(rim);
+
+  const throat = new THREE.Mesh(
+    new THREE.BoxGeometry(0.52, 0.14, 0.52),
+    new THREE.MeshStandardMaterial({ color: 0x11181b, roughness: 1 })
+  );
+  throat.position.y = 1.4;
+  throat.rotation.y = Math.PI / 4;
+  shakeGroup.add(throat);
+
+  const chute = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.34, 0.12), hopperMaterial);
+  chute.position.set(0, 0.64, 0.46);
+  grinder.add(chute);
+
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.42, 6), benchMetalMaterial);
+  handle.rotation.z = Math.PI / 2;
+  handle.position.set(-0.7, 0.72, 0.05);
+  grinder.add(handle);
+}
+
+grinder.position.set(GRINDER_POSITION.x, getGroundHeight(GRINDER_POSITION.x, GRINDER_POSITION.z), GRINDER_POSITION.z);
+grinder.rotation.y = Math.atan2(-GRINDER_POSITION.x, -GRINDER_POSITION.z);
+grinder.userData.grinderRef = true;
+world.add(grinder);
+solidProps.push({ x: GRINDER_POSITION.x, z: GRINDER_POSITION.z, radius: 0.72, type: 'grinder' });
+
+const benchState = {
+  stock: { wood: 0, iron: 0 },
+  tier: 1,
+  crafted: new Set(),
+  signPop: { wood: 0, iron: 0 }
 };
+
+const grinderDrops = [];
+
+function updateBenchSigns(popKind = '') {
+  if (benchParts.woodSign) benchParts.woodSign.setValue(benchState.stock.wood, benchState.tier >= 3);
+  if (benchParts.ironSign) benchParts.ironSign.setValue(benchState.stock.iron, benchState.tier >= 3);
+  if (popKind) benchState.signPop[popKind] = 1;
+}
+
+function updateBenchVisuals() {
+  benchTier2Group.visible = benchState.tier >= 2;
+  benchTier3Group.visible = benchState.tier >= 3;
+  updateBenchSigns();
+}
 
 // ---------- Iron walls ----------
 
@@ -1197,9 +1403,7 @@ const RECIPES = [
   { id: 'bench3', tier: 2, name: 'Crafting Bench 3', icon: '🛠', cost: { wood: 15, iron: 10 }, desc: 'Upgrade the bench to unlock tier 3 gear.', kind: 'bench', oneTime: true, benchTier: 3 },
   { id: 'ironSword', tier: 3, name: 'Iron Sword', icon: '🗡', cost: { wood: 5, iron: 5 }, desc: 'A strong melee blade for monsters.', kind: 'tool', repeatable: true },
   { id: 'ironWall', tier: 3, name: 'Iron Wall', icon: '🛡', cost: { wood: 8, iron: 6 }, desc: 'A sturdy metal wall. Craft it, then place it.', kind: 'placeable', placeType: 'ironWall', repeatable: true },
-  { id: 'bench4', tier: 4, name: 'Crafting Bench 4', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' },
-  { id: 'mystery1', tier: 4, name: '???', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' },
-  { id: 'mystery2', tier: 4, name: '???', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' }
+  { id: 'bench4', tier: 4, name: 'Crafting Bench 4', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' }
 ];
 const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
 let interactPrompt = 'INTERACT';
@@ -1399,26 +1603,6 @@ function createIronWallItemMesh() {
   return wall;
 }
 
-function createBiggerCampfireItemMesh() {
-  const upgrade = new THREE.Group();
-  for (let i = 0; i < 4; i += 1) {
-    const log = new THREE.Mesh(logGeometry, logMaterial);
-    log.scale.setScalar(0.7);
-    log.rotation.z = Math.PI / 2;
-    log.rotation.y = (i / 4) * Math.PI;
-    log.position.y = 0.1;
-    log.castShadow = true;
-    upgrade.add(log);
-  }
-  const ember = new THREE.Mesh(
-    new THREE.SphereGeometry(0.13, 6, 5),
-    new THREE.MeshBasicMaterial({ color: 0xff9a3c })
-  );
-  ember.position.y = 0.22;
-  upgrade.add(ember);
-  return upgrade;
-}
-
 function makeGroundItemMesh(type) {
   let mesh;
   if (type === 'wood') {
@@ -1449,9 +1633,6 @@ function makeGroundItemMesh(type) {
     mesh.rotation.set(0.05, Math.random() * Math.PI * 2, 0.04);
   } else if (type === 'ironWall') {
     mesh = createIronWallItemMesh();
-    mesh.rotation.y = Math.random() * Math.PI * 2;
-  } else if (type === 'biggerCampfire') {
-    mesh = createBiggerCampfireItemMesh();
     mesh.rotation.y = Math.random() * Math.PI * 2;
   } else {
     mesh = createBerryMesh(1);
@@ -1576,10 +1757,10 @@ function regrowBerries() {
 }
 
 const STARTER_IRON_SPOTS = [
-  { x: MACHINE_POSITION.x - 1.55, z: MACHINE_POSITION.z - 1.15 },
-  { x: MACHINE_POSITION.x - 1.25, z: MACHINE_POSITION.z + 1.35 },
-  { x: MACHINE_POSITION.x + 1.75, z: MACHINE_POSITION.z - 1.35 },
-  { x: MACHINE_POSITION.x + 1.95, z: MACHINE_POSITION.z + 0.9 }
+  { x: GRINDER_POSITION.x - 1.5, z: GRINDER_POSITION.z - 1.2 },
+  { x: GRINDER_POSITION.x - 1.1, z: GRINDER_POSITION.z + 1.4 },
+  { x: BENCH_POSITION.x - 2.0, z: BENCH_POSITION.z - 0.6 },
+  { x: BENCH_POSITION.x + 0.4, z: BENCH_POSITION.z + 1.8 }
 ];
 
 function spawnStarterIron() {
@@ -1654,7 +1835,7 @@ function isBackpackEquipped() {
 function addItemToBackpack(item) {
   if (!item || item.popping > 0) return false;
   if (!Object.prototype.hasOwnProperty.call(state.backpack, item.type)) return false;
-  if (backpackCount() >= BACKPACK_CAPACITY) {
+  if (backpackCount() >= state.backpackCapacity) {
     showToast('Backpack is full');
     return false;
   }
@@ -1669,46 +1850,8 @@ function addItemToBackpack(item) {
   return true;
 }
 
-function applyBiggerCampfire() {
-  state.fireLevel += 1;
-  const scale = 1 + Math.min(state.fireLevel, 5) * 0.14;
-  campfire.scale.setScalar(scale);
-  fireGlow.distance = 15 + state.fireLevel * 4.5;
-  warmLight.distance = 20 + state.fireLevel * 5;
-  showToast('The campfire grows brighter');
-  playUpgradeChime();
-}
-
-function collectUpgradeItem(item) {
-  if (!item || item.popping > 0) return false;
-  const type = item.type;
-  popGroundItem(item);
-
-  if (type === 'ironWall') {
-    createIronWall(placedWalls.length);
-    showToast('Iron Wall placed by the campfire');
-  } else if (type === 'biggerCampfire') {
-    applyBiggerCampfire();
-  } else if (isToolType(type)) {
-    state.ownedTools[type] = true;
-    updateHud();
-    updateToolUi();
-    showToast(`Collected ${ITEM_NAMES[type]}`);
-    playUpgradeChime();
-    equipTool(type);
-    return true;
-  }
-
-  updateHud();
-  playPickupSound();
-  return true;
-}
-
 function pickUpItem(item) {
   if (!item || item.carried || item.popping > 0) return false;
-  if (isUpgradeType(item.type)) {
-    return collectUpgradeItem(item);
-  }
   if (isBackpackEquipped()) {
     return addItemToBackpack(item);
   }
@@ -1728,7 +1871,19 @@ function pickUpItem(item) {
 
 function dropCarriedItems() {
   if (!state.started || state.gameOver || state.falling || state.paused
-    || state.machineOpen || state.settingsOpen || state.dropCooldown > 0 || !heldItem) return;
+    || state.craftOpen || state.settingsOpen || state.dropCooldown > 0 || !heldItem) return;
+
+  if (getGrinderDistance() <= GRINDER_RANGE) {
+    if (heldItem.type === 'wood' || heldItem.type === 'iron') putInGrinder();
+    else showToast("Can't grind this");
+    return;
+  }
+
+  if (getCampfireDistance() <= FIRE_FEED_RANGE) {
+    if (heldItem.type === 'wood') putLogInFire();
+    else showToast('Only logs burn');
+    return;
+  }
 
   const item = heldItem;
   heldItem = null;
@@ -1748,27 +1903,56 @@ function dropCarriedItems() {
   showToast('Dropped item');
 }
 
-function throwCarriedIntoFire() {
-  if (!heldItem || !FIRE_FUEL_TYPES.has(heldItem.type)) return;
-  const item = heldItem;
-  const fuel = FUEL_VALUES[item.type] || 5;
-  popGroundItem(item);
-  state.fuel = clamp(state.fuel + fuel, 0, 100);
-  state.fireOut = false;
-  state.fireFlare = 1;
-  updateHud();
-  showToast(`Fire +${Math.round(fuel)}%`);
+function addFireProgress(amount) {
+  if (!state.started || state.gameOver) return;
+  if (state.fireOut) {
+    state.fireOut = false;
+    state.fireDarken = 0;
+    state.fireFlare = 0.8;
+    fireWarning.classList.remove('visible');
+    showToast('The fire roars back to life');
+  }
+  if (state.fireLevel >= FIRE_LEVEL_MAX) {
+    state.fireProgress = 100;
+    updateHud();
+    return;
+  }
+  state.fireFlare = Math.max(state.fireFlare, 0.55);
+  state.fireProgress = clamp(state.fireProgress + amount, 0, 100);
+  if (state.fireProgress >= 100) {
+    levelUpCampfire();
+  } else {
+    updateHud();
+  }
 }
 
-function feedFireFromBackpack() {
-  const type = ['wood', 'sapling', 'berry'].find((candidate) => state.backpack[candidate] > 0);
-  if (!type) return;
-  state.backpack[type] -= 1;
-  state.fuel = clamp(state.fuel + (FUEL_VALUES[type] || 5), 0, 100);
+function levelUpCampfire() {
+  if (state.fireLevel >= FIRE_LEVEL_MAX) {
+    state.fireProgress = 100;
+    updateHud();
+    return;
+  }
+  state.fireLevel += 1;
+  state.fireProgress = state.fireLevel >= FIRE_LEVEL_MAX ? 100 : FIRE_LEVELUP_RESET;
   state.fireOut = false;
+  state.fireDarken = 0;
   state.fireFlare = 1;
+  buildCampfireLevel(state.fireLevel);
+  triggerFireFlash();
+  playFireLevelChime();
+  showToast('Campfire level up!');
   updateHud();
-  showToast(`Fed the fire with ${ITEM_NAMES[type].toLowerCase()}`);
+}
+
+function putLogInFire() {
+  if (!heldItem || heldItem.type !== 'wood') {
+    showToast('Only logs burn');
+    return;
+  }
+  const gain = FIRE_GAIN_PER_LOG[state.fireLevel] || 2;
+  popGroundItem(heldItem);
+  addFireProgress(gain);
+  showToast(`Log added (+${gain})`);
 }
 
 function fellTree(tree) {
@@ -1880,303 +2064,488 @@ function updateIronRocks(delta) {
   }
 }
 
-// ---------- Upgrade machine ----------
+// ---------- Crafting bench UI ----------
 
-function canAffordUpgrade(upgrade) {
-  return availableCount('wood') >= upgrade.cost.wood && availableCount('iron') >= upgrade.cost.iron;
+let craftCards = new Map();
+let craftGridBuilt = false;
+
+function recipeLocked(recipe) {
+  return recipe.kind === 'locked' || recipe.tier > benchState.tier;
 }
 
-function missingUpgradeText(upgrade) {
-  const missing = [];
-  const wood = availableCount('wood');
-  const iron = availableCount('iron');
-  if (wood < upgrade.cost.wood) {
-    missing.push(`${upgrade.cost.wood - wood} wood`);
-  }
-  if (iron < upgrade.cost.iron) {
-    missing.push(`${upgrade.cost.iron - iron} iron`);
-  }
-  return missing.join(' + ');
+function recipeSoldOut(recipe) {
+  if (recipe.oneTime && benchState.crafted.has(recipe.id)) return true;
+  if (recipe.trap && placedTraps.length >= MAX_BEAR_TRAPS) return true;
+  return false;
 }
 
-function spendResource(type, amount) {
-  let remaining = amount;
-  const fromBackpack = Math.min(state.backpack[type], remaining);
-  state.backpack[type] -= fromBackpack;
-  remaining -= fromBackpack;
-  while (remaining > 0) {
-    if (!heldItem || heldItem.type !== type) break;
-    popGroundItem(heldItem);
-    remaining -= 1;
-  }
-  return amount - remaining;
+function canAffordRecipe(recipe) {
+  return (benchState.stock.wood >= (recipe.cost.wood || 0))
+    && (benchState.stock.iron >= (recipe.cost.iron || 0));
 }
 
-function buildUpgradeOptions() {
-  if (upgradeGrid.childElementCount > 0) return;
-  for (const key of UPGRADE_ORDER) {
-    const upgrade = UPGRADES[key];
+function costText(recipe) {
+  const parts = [];
+  if (recipe.cost.wood) parts.push(`${recipe.cost.wood}W`);
+  if (recipe.cost.iron) parts.push(`${recipe.cost.iron}I`);
+  return parts.join(' · ') || 'FREE';
+}
+
+function updateCraftStock(popKind = '') {
+  craftWoodStock.textContent = String(benchState.stock.wood);
+  craftIronStock.textContent = String(benchState.stock.iron);
+  if (popKind) {
+    const target = popKind === 'wood' ? craftWoodStock : craftIronStock;
+    target.classList.remove('pop');
+    void target.offsetWidth;
+    target.classList.add('pop');
+  }
+}
+
+function buildCraftGrid() {
+  if (craftGridBuilt) return;
+  craftGridBuilt = true;
+  craftGrid.innerHTML = '';
+  craftCards = new Map();
+
+  let lastTier = 1;
+  for (const recipe of RECIPES) {
+    if (recipe.tier !== lastTier) {
+      lastTier = recipe.tier;
+      const heading = document.createElement('div');
+      heading.className = 'craft-tier-label';
+      heading.textContent = `NEEDS CRAFTING BENCH ${recipe.tier}`;
+      craftGrid.appendChild(heading);
+    }
+
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'upgrade-card';
-    card.dataset.upgrade = key;
+    card.className = 'craft-card';
+    card.dataset.recipe = recipe.id;
+
+    const icon = document.createElement('span');
+    icon.className = 'craft-card-icon';
+    icon.textContent = recipe.icon;
 
     const name = document.createElement('span');
-    name.className = 'upgrade-name';
-    name.textContent = upgrade.name;
+    name.className = 'craft-card-name';
+    name.textContent = recipe.name;
 
     const cost = document.createElement('span');
-    cost.className = 'upgrade-cost';
-    cost.dataset.cost = `${upgrade.cost.wood} wood · ${upgrade.cost.iron} iron`;
+    cost.className = 'craft-card-cost';
+    cost.textContent = costText(recipe);
 
-    const desc = document.createElement('span');
-    desc.className = 'upgrade-desc';
-    desc.textContent = upgrade.desc;
+    const badge = document.createElement('span');
+    badge.className = 'craft-card-badge';
 
-    card.append(name, cost, desc);
+    card.append(icon, name, cost, badge);
     card.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      startUpgrade(key);
+      selectRecipe(recipe.id);
     });
-    upgradeGrid.appendChild(card);
+    craftGrid.appendChild(card);
+    craftCards.set(recipe.id, card);
   }
 }
 
-function updateMachinePanel() {
-  const job = machineState.working ? UPGRADES[machineState.working] : null;
-  const fuelPercent = Math.round(machineState.fuel);
-  machineFuelText.textContent = `${fuelPercent}%`;
-  machineFuelFill.style.width = `${fuelPercent}%`;
+function updateCraftGrid() {
+  for (const [id, card] of craftCards) {
+    const recipe = RECIPE_BY_ID.get(id);
+    if (!recipe) continue;
+    const locked = recipeLocked(recipe);
+    const soldOut = recipeSoldOut(recipe);
+    card.classList.toggle('locked', locked);
+    card.classList.toggle('soldout', soldOut);
+    card.classList.toggle('selected', state.craftSelected === id);
 
-  machineStatus.classList.remove('working', 'stalled', 'ready');
-  if (job) {
-    machineJob.classList.remove('hidden');
-    machineJobName.textContent = job.name;
-    const remaining = Math.max(0, job.time - machineState.progress);
-    machineJobTime.textContent = machineState.stalled ? 'OUT OF FUEL' : `${remaining.toFixed(1)}s`;
-    machineJobFill.style.width = `${clamp(machineState.progress / job.time, 0, 1) * 100}%`;
-    if (machineState.stalled) {
-      machineStatus.textContent = 'Out of fuel - add wood';
-      machineStatus.classList.add('stalled');
-    } else {
-      machineStatus.textContent = `${job.name} working`;
-      machineStatus.classList.add('working');
-    }
-  } else {
-    machineJob.classList.add('hidden');
-    machineJobFill.style.width = '0%';
-    if (machineState.statusTimer > 0) {
-      machineStatus.textContent = machineState.statusText || 'Idle';
-      if ((machineState.statusText || '').includes('ready')) machineStatus.classList.add('ready');
-    } else {
-      machineStatus.textContent = machineState.fuel > 0 ? 'Ready for a new upgrade' : 'Add wood to start';
-    }
-  }
-
-  for (const card of upgradeGrid.children) {
-    const key = card.dataset.upgrade;
-    const upgrade = UPGRADES[key];
-    if (!upgrade) continue;
-    const owned = isToolType(key) && state.ownedTools[key];
-    const affordable = canAffordUpgrade(upgrade);
-    card.classList.toggle('owned', owned);
-    card.classList.toggle('unaffordable', !owned && !affordable);
-    card.classList.toggle('working', machineState.working === key);
-    const cost = card.querySelector('.upgrade-cost');
-    if (owned) {
-      cost.textContent = 'OWNED';
-      cost.classList.remove('missing');
-    } else {
-      cost.textContent = affordable
-        ? cost.dataset.cost
-        : `${cost.dataset.cost} · need ${missingUpgradeText(upgrade)}`;
-      cost.classList.toggle('missing', !affordable);
-    }
+    const badge = card.querySelector('.craft-card-badge');
+    let badgeText = '';
+    if (soldOut) badgeText = 'SOLD OUT';
+    else if (recipe.trap) badgeText = `x${MAX_BEAR_TRAPS}`;
+    else if (recipe.repeatable) badgeText = '∞';
+    else if (locked && recipe.tier === 4) badgeText = '🔒';
+    badge.textContent = badgeText;
+    badge.style.display = badgeText ? '' : 'none';
   }
 }
 
-function openMachinePanel() {
+function selectRecipe(id) {
+  const recipe = RECIPE_BY_ID.get(id);
+  if (!recipe) return;
+  state.craftSelected = id;
+  updateCraftGrid();
+  updateCraftDetail();
+  playEquipClick();
+}
+
+function updateCraftDetail() {
+  craftTierLabel.textContent = `BENCH ${benchState.tier}`;
+  updateCraftStock();
+
+  let recipe = RECIPE_BY_ID.get(state.craftSelected);
+  if (!recipe) {
+    recipe = RECIPES[0];
+    state.craftSelected = recipe.id;
+  }
+
+  const locked = recipeLocked(recipe);
+  const soldOut = recipeSoldOut(recipe);
+
+  craftDetailIcon.textContent = recipe.icon;
+  craftDetailName.textContent = recipe.name;
+  craftDetailDesc.textContent = locked
+    ? `Requires Crafting Bench ${recipe.tier}.`
+    : recipe.desc;
+
+  craftDetailCost.innerHTML = '';
+  const costKinds = ['wood', 'iron'];
+  let hasCost = false;
+  for (const kind of costKinds) {
+    const amount = recipe.cost[kind] || 0;
+    if (!amount) continue;
+    hasCost = true;
+    const chip = document.createElement('span');
+    chip.className = 'cost-chip';
+    chip.textContent = `${amount} ${kind}`;
+    if (benchState.stock[kind] < amount) chip.classList.add('missing');
+    craftDetailCost.appendChild(chip);
+  }
+  if (!hasCost) {
+    const chip = document.createElement('span');
+    chip.className = 'cost-chip';
+    chip.textContent = locked ? 'NOT AVAILABLE' : 'NO COST';
+    craftDetailCost.appendChild(chip);
+  }
+
+  let badge = '';
+  if (soldOut) badge = 'SOLD OUT';
+  else if (locked) badge = recipe.tier === 4 ? 'COMING SOON' : `LOCKED · NEEDS BENCH ${recipe.tier}`;
+  else if (recipe.trap) badge = `MAX ${MAX_BEAR_TRAPS} PLACED`;
+  else if (recipe.repeatable) badge = '∞ REPEATABLE';
+  craftDetailBadge.textContent = badge;
+
+  craftButton.disabled = locked || soldOut;
+  craftButton.textContent = soldOut ? 'SOLD OUT' : 'CRAFT';
+}
+
+function refreshCraftUi(popKind = '') {
+  updateBenchSigns(popKind);
+  if (!state.craftOpen) return;
+  updateCraftStock(popKind);
+  updateCraftGrid();
+  updateCraftDetail();
+  updateHotbarLabels();
+}
+
+function openCraftPanel() {
   if (!state.started || state.gameOver || state.falling || state.paused) return;
-  state.machineOpen = true;
+  state.craftOpen = true;
   setInventoryOpen(false);
   setSettingsOpen(false);
   releaseJoystick();
   activePointers.clear();
   state.look.active = false;
   state.pinchDistance = 0;
-  buildUpgradeOptions();
-  updateMachinePanel();
-  upgradePanel.classList.remove('hidden');
+  buildCraftGrid();
+  updateCraftGrid();
+  updateCraftDetail();
+  craftPanel.classList.remove('hidden');
   updateToolUi();
   playEquipClick();
 }
 
-function closeMachinePanel() {
-  state.machineOpen = false;
-  upgradePanel.classList.add('hidden');
+function closeCraftPanel() {
+  state.craftOpen = false;
+  craftPanel.classList.add('hidden');
   updateToolUi();
 }
 
-function startUpgrade(key) {
-  if (!state.started || state.gameOver || state.falling) return;
-  const upgrade = UPGRADES[key];
-  if (!upgrade) return;
-  if (machineState.working) {
-    showToast('The machine is already working');
-    return;
-  }
-  if (isToolType(key) && state.ownedTools[key]) {
-    showToast(`You already own the ${upgrade.name}`);
-    return;
-  }
-  if (!canAffordUpgrade(upgrade)) {
-    showToast(`Missing ${missingUpgradeText(upgrade)}`);
-    return;
-  }
-  if (machineState.fuel <= 0) {
-    showToast('Add wood to fuel the machine');
-    return;
-  }
-
-  spendResource('wood', upgrade.cost.wood);
-  spendResource('iron', upgrade.cost.iron);
-  machineState.working = key;
-  machineState.progress = 0;
-  machineState.stalled = false;
-  machineState.statusTimer = 0;
-  machineState.clankTimer = 0.2;
-  updateHud();
-  updateMachinePanel();
-  startMachineSound();
-  playEquipClick();
-  showToast(`${upgrade.name} started`);
+function updateHotbarLabels() {
+  axeLabel.textContent = state.ownedTools.ironAxe ? 'Good Axe' : 'Old Axe';
+  backpackLabel.textContent = state.goodSack ? 'Good Sack' : 'Old Sack';
+  pickaxeLabel.textContent = 'Pickaxe';
+  torchLabel.textContent = 'Torch';
+  ironSwordLabel.textContent = 'Iron Sword';
 }
 
-function addMachineFuel() {
-  if (!state.started || state.gameOver || state.falling) return;
-  let source = '';
-
-  if (state.backpack.wood > 0) {
-    state.backpack.wood -= 1;
-    source = 'backpack';
-  } else {
-    if (heldItem && heldItem.type === 'wood') {
-      popGroundItem(heldItem);
-      source = 'hands';
-    } else {
-      const nearbyWood = findNearestGroundItem(4.5, (item) => item.type === 'wood');
-      if (nearbyWood) {
-        popGroundItem(nearbyWood);
-        source = 'ground';
-      }
-    }
+function deliverRecipe(recipe) {
+  if (recipe.kind === 'tool') {
+    state.ownedTools[recipe.id] = true;
+    if (recipe.id === 'ironAxe') state.goodAxe = true;
+    updateHotbarLabels();
+    updateToolUi();
+    showToast(`${recipe.name} added to the hotbar`);
+  } else if (recipe.kind === 'sack') {
+    state.goodSack = true;
+    state.backpackCapacity = GOOD_SACK_CAPACITY;
+    updateHotbarLabels();
+    updateHud();
+    showToast(`Good Sack: capacity ${GOOD_SACK_CAPACITY}`);
+  } else if (recipe.kind === 'bench') {
+    benchState.tier = recipe.benchTier;
+    updateBenchVisuals();
+    showToast(`Crafting Bench ${benchState.tier} unlocked`);
+  } else if (recipe.kind === 'placeable') {
+    state.carriedPlaceable = recipe.placeType;
+    updatePlaceButton();
+    showToast(`${recipe.name} ready — tap Place`);
   }
+}
 
-  if (!source) {
-    showToast('No wood to feed the machine');
+function craftSelectedRecipe() {
+  if (!state.started || state.gameOver || state.falling) return;
+  const recipe = RECIPE_BY_ID.get(state.craftSelected);
+  if (!recipe) return;
+  if (recipeLocked(recipe)) {
+    showToast(`Needs Crafting Bench ${recipe.tier}`);
+    return;
+  }
+  if (recipeSoldOut(recipe)) {
+    showToast(recipe.trap ? 'All bear traps are placed' : 'Sold out');
+    return;
+  }
+  if (!canAffordRecipe(recipe)) {
+    const missing = [];
+    if (benchState.stock.wood < (recipe.cost.wood || 0)) missing.push('wood');
+    if (benchState.stock.iron < (recipe.cost.iron || 0)) missing.push('iron');
+    showToast(`Not enough ${missing.join(' or ')} in the bench`);
+    playErrorTone();
     return;
   }
 
-  machineState.fuel = clamp(machineState.fuel + MACHINE_WOOD_FUEL, 0, MACHINE_FUEL_MAX);
-  if (machineState.working && machineState.stalled) {
-    machineState.stalled = false;
-    startMachineSound();
-  }
-  updateHud();
-  updateMachinePanel();
-  playPickupSound();
-  showToast(`Machine fuel +${MACHINE_WOOD_FUEL}%`);
-}
+  benchState.stock.wood -= recipe.cost.wood || 0;
+  benchState.stock.iron -= recipe.cost.iron || 0;
+  if (recipe.oneTime) benchState.crafted.add(recipe.id);
 
-function completeUpgrade() {
-  const key = machineState.working;
-  if (!key) return;
-  const upgrade = UPGRADES[key];
-  machineState.working = null;
-  machineState.progress = 0;
-  machineState.stalled = false;
-  machineState.statusText = `${upgrade.name} ready!`;
-  machineState.statusTimer = 6;
-  stopMachineSound();
+  deliverRecipe(recipe);
   playUpgradeDing();
-
-  const forwardX = Math.sin(machine.rotation.y);
-  const forwardZ = Math.cos(machine.rotation.y);
-  const x = MACHINE_POSITION.x + forwardX * 1.35;
-  const z = MACHINE_POSITION.z + forwardZ * 1.35;
-  spawnGroundItem(key, x, z, {
-    startY: getGroundHeight(x, z) + 1.15,
-    velocityY: 2.4,
-    pickupDelay: 0.65
-  });
-  showToast(`${upgrade.name} is ready to collect`);
+  refreshCraftUi();
+  updateCraftGrid();
+  updateCraftDetail();
   updateHud();
-  updateMachinePanel();
 }
 
-function updateMachine(delta) {
-  const job = machineState.working ? UPGRADES[machineState.working] : null;
-  const burning = !!job && machineState.fuel > 0 && !machineState.stalled;
+function updatePlaceButton() {
+  const carried = !!state.carriedPlaceable;
+  placeBtn.style.display = carried ? 'flex' : 'none';
+  if (carried) {
+    const label = placeBtn.querySelector('span');
+    if (label) label.textContent = 'PLACE';
+  }
+}
 
-  if (job && !machineState.stalled) {
-    if (machineState.fuel > 0) {
-      machineState.fuel = Math.max(0, machineState.fuel - delta * MACHINE_FUEL_DRAIN);
-      machineState.progress += delta;
-      machineState.clankTimer -= delta;
-      if (machineState.clankTimer <= 0) {
-        playMachineClank();
-        machineState.clankTimer = 0.42 + Math.random() * 0.38;
-      }
-
-      if (machineState.fuel <= 0 && machineState.progress < job.time) {
-        machineState.stalled = true;
-        machineState.statusText = 'Out of fuel';
-        machineState.statusTimer = 3;
-        stopMachineSound();
-        showToast('Machine is out of fuel - add wood');
-      } else if (machineState.progress >= job.time) {
-        completeUpgrade();
-      }
+function spawnWall(kind, x, z, rotation) {
+  const group = new THREE.Group();
+  if (kind === 'logWall') {
+    const barkMaterial = new THREE.MeshStandardMaterial({ color: 0x7a4c25, roughness: 0.9 });
+    const barkDark = new THREE.MeshStandardMaterial({ color: 0x4f2f16, roughness: 0.95 });
+    for (let i = 0; i < 3; i += 1) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 1.8, 7), barkMaterial);
+      log.rotation.z = Math.PI / 2;
+      log.position.set(0, 0.3 + i * 0.32, 0);
+      log.castShadow = true;
+      group.add(log);
+    }
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.15, 6), barkDark);
+      post.position.set(side * 0.82, 0.58, 0.12);
+      post.castShadow = true;
+      group.add(post);
+    }
+  } else {
+    for (let i = 0; i < 3; i += 1) {
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.02, 0.16), ironWallMaterial);
+      panel.position.set((i - 1) * 0.54, 0.54, 0);
+      panel.castShadow = true;
+      panel.receiveShadow = true;
+      group.add(panel);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.1, 0.19), ironWallEdgeMaterial);
+      band.position.set((i - 1) * 0.54, 0.88, 0);
+      band.castShadow = true;
+      group.add(band);
+    }
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.2, 0.24), ironWallEdgeMaterial);
+      post.position.set(side * 0.88, 0.6, 0);
+      post.castShadow = true;
+      group.add(post);
     }
   }
 
-  if (machineState.statusTimer > 0) {
-    machineState.statusTimer = Math.max(0, machineState.statusTimer - delta);
+  group.position.set(x, getGroundHeight(x, z), z);
+  group.rotation.y = rotation;
+  world.add(group);
+  placedWalls.push({ group, x, z, rotation, width: 1.9, depth: 0.34, kind });
+}
+
+const placedTraps = [];
+const trapMaterial = new THREE.MeshStandardMaterial({ color: 0x7c878d, roughness: 0.42, metalness: 0.7 });
+const trapDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x3f484d, roughness: 0.5, metalness: 0.62 });
+
+function spawnBearTrap(x, z, rotation) {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 6, 14), trapDarkMaterial);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.06;
+  group.add(ring);
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.07, 10), trapDarkMaterial);
+  base.position.y = 0.05;
+  group.add(base);
+
+  const jaws = new THREE.Group();
+  jaws.position.y = 0.08;
+  for (let i = 0; i < 6; i += 1) {
+    const angle = (i / 6) * Math.PI * 2;
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.2, 4), trapMaterial);
+    tooth.position.set(Math.cos(angle) * 0.36, 0.09, Math.sin(angle) * 0.36);
+    tooth.rotation.z = Math.cos(angle) * 0.5;
+    tooth.rotation.x = Math.sin(angle) * 0.5;
+    jaws.add(tooth);
+  }
+  group.add(jaws);
+
+  group.position.set(x, getGroundHeight(x, z), z);
+  group.rotation.y = rotation;
+  world.add(group);
+  placedTraps.push({ group, jaws, x, z, rotation, sprung: false, anim: 0 });
+}
+
+function resetBearTraps() {
+  for (const trap of placedTraps) world.remove(trap.group);
+  placedTraps.length = 0;
+}
+
+function updateBearTraps(delta) {
+  for (const trap of placedTraps) {
+    if (trap.sprung) {
+      trap.anim = Math.min(1, trap.anim + delta * 5);
+      const close = trap.anim;
+      trap.jaws.scale.y = 1 + close * 0.8;
+      trap.jaws.position.y = 0.08 + close * 0.1;
+      continue;
+    }
+
+    for (const enemy of enemies) {
+      if (!enemy.visible || enemy.userData.fading || enemy.userData.dead) continue;
+      if (Math.hypot(enemy.position.x - trap.x, enemy.position.z - trap.z) > 0.82) continue;
+      trap.sprung = true;
+      trap.anim = 0;
+      const data = enemy.userData;
+      data.health -= 2;
+      data.hitTimer = 0.3;
+      data.bodyMat.emissive.setHex(0xff2f1a);
+      data.bodyMat.emissiveIntensity = 1.2;
+      data.stunTimer = 1.6;
+      if (data.health <= 0) {
+        data.health = 0;
+        data.dead = true;
+        startEnemyFade(enemy, 4);
+      }
+      playMeleeHit();
+      showToast('Bear trap snapped!');
+      break;
+    }
+  }
+}
+
+function placeCarried() {
+  if (!state.started || state.gameOver || state.falling || state.paused) return;
+  const type = state.carriedPlaceable;
+  if (!type) return;
+
+  const yaw = state.cameraYaw;
+  const x = player.position.x + Math.sin(yaw) * 2.1;
+  const z = player.position.z + Math.cos(yaw) * 2.1;
+  const rotation = yaw;
+
+  if (type === 'bearTrap') {
+    if (placedTraps.length >= MAX_BEAR_TRAPS) {
+      showToast(`Only ${MAX_BEAR_TRAPS} traps can be placed`);
+      return;
+    }
+    spawnBearTrap(x, z, rotation);
+    showToast('Bear trap placed');
+  } else {
+    spawnWall(type, x, z, rotation);
+    showToast(`${ITEM_NAMES[type] || 'Wall'} placed`);
   }
 
+  state.carriedPlaceable = null;
+  updatePlaceButton();
+  playLandSound();
+  updateHud();
+}
+
+// ---------- Grinder ----------
+
+function spawnGrinderDrop(type) {
+  const material = type === 'wood'
+    ? new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 })
+    : new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.4, metalness: 0.6 });
+  const mesh = new THREE.Mesh(
+    type === 'wood' ? new THREE.CylinderGeometry(0.09, 0.1, 0.32, 6) : new THREE.BoxGeometry(0.2, 0.2, 0.2),
+    material
+  );
+  mesh.position.set(grinder.position.x, grinder.position.y + 2.0, grinder.position.z);
+  world.add(mesh);
+  grinderDrops.push({ mesh, t: 0 });
+}
+
+function putInGrinder() {
+  if (!heldItem) return;
+  const type = heldItem.type;
+  if (type !== 'wood' && type !== 'iron') {
+    showToast("Can't grind this");
+    return;
+  }
+  const item = heldItem;
+  popGroundItem(item);
+  benchState.stock[type] += 1;
+  spawnGrinderDrop(type);
+  playGrinderSound();
+  grinderParts.shake = 0.5;
+  refreshCraftUi(type);
+  updateHud();
+  showToast(`+1 ${type} to the bench (${benchState.stock[type]})`);
+}
+
+function updateGrinder(delta) {
   const t = performance.now() * 0.001;
-  machinePanelMaterial.emissiveIntensity = burning
-    ? 1.15 + Math.sin(t * 11) * 0.25
-    : 0.62 + Math.sin(t * 2.2) * 0.1;
-  machineParts.glow.intensity = burning
-    ? 1.8 + Math.sin(t * 13) * 0.35
-    : 0.8 + Math.sin(t * 2.4) * 0.1;
-
-  if (burning) {
-    machineState.gearAngle += delta * 2.6;
-    machineGears[0].rotation.x = machineState.gearAngle;
-    machineGears[1].rotation.x = -machineState.gearAngle * 0.7;
+  grinderParts.shake = Math.max(0, (grinderParts.shake || 0) - delta);
+  const shake = grinderParts.shake > 0
+    ? Math.sin(t * 58) * 0.035 * (grinderParts.shake / 0.5)
+    : 0;
+  if (grinderParts.shakeGroup) {
+    grinderParts.shakeGroup.rotation.z = shake;
+    grinderParts.shakeGroup.position.y = Math.abs(shake) * 0.2;
+  }
+  if (grinderParts.wheels && grinderParts.shake > 0) {
+    for (const wheel of grinderParts.wheels) wheel.rotation.x += delta * 14;
   }
 
-  for (let i = 0; i < machineSmokePuffs.length; i += 1) {
-    const puff = machineSmokePuffs[i];
-    if (burning) {
-      const phase = (t * 0.32 + i / machineSmokePuffs.length) % 1;
-      puff.position.set(
-        0.66 + Math.sin(t * 1.1 + i) * 0.1,
-        2.9 + phase * 1.55,
-        -0.4 + Math.cos(t * 1.3 + i) * 0.1
-      );
-      puff.scale.setScalar(0.85 + phase * 1.65);
-      puff.material.opacity = 0.24 * (1 - phase);
-    } else {
-      puff.material.opacity = Math.max(0, puff.material.opacity - delta * 0.25);
+  for (let i = grinderDrops.length - 1; i >= 0; i -= 1) {
+    const drop = grinderDrops[i];
+    drop.t += delta;
+    const p = drop.t / 0.4;
+    drop.mesh.position.y = grinder.position.y + 2.0 - p * 0.65;
+    drop.mesh.rotation.x += delta * 7;
+    drop.mesh.scale.setScalar(Math.max(0.05, 1 - p * 0.85));
+    if (p >= 1) {
+      world.remove(drop.mesh);
+      grinderDrops.splice(i, 1);
     }
   }
 
-  if (state.machineOpen) updateMachinePanel();
+  for (const kind of ['wood', 'iron']) {
+    const sign = kind === 'wood' ? benchParts.woodSign : benchParts.ironSign;
+    if (!sign || !sign.mesh) continue;
+    sign.pop = Math.max(0, (sign.pop || 0) - delta * 3.2);
+    sign.mesh.scale.setScalar(1 + sign.pop * 0.35);
+  }
 }
+
 
 function updateGroundItems(delta) {
   const now = performance.now();
@@ -2254,7 +2623,7 @@ function markChoppable(tree) {
 
 function plantSapling() {
   if (!state.started || state.gameOver || state.falling || state.paused
-    || state.machineOpen || state.settingsOpen || state.plantCooldown > 0) return;
+    || state.craftOpen || state.settingsOpen || state.plantCooldown > 0) return;
   if (!heldItem || heldItem.type !== 'sapling') {
     showToast('Carry a sapling to plant it');
     return;
@@ -2595,6 +2964,162 @@ for (let i = 0; i < 4; i += 1) {
   smokePuffs.push(puff);
 }
 
+// ---------- Campfire levels ----------
+
+const campfireLogMaterial = new THREE.MeshStandardMaterial({ color: 0x6a3d1d, roughness: 0.92 });
+const campfireLogDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x46280f, roughness: 0.95 });
+const campfireStoneMaterial = new THREE.MeshStandardMaterial({ color: 0x6c7377, roughness: 0.95 });
+const campfireIronMaterial = new THREE.MeshStandardMaterial({ color: 0x3a4145, roughness: 0.5, metalness: 0.7 });
+const campfireEmberMaterial = new THREE.MeshStandardMaterial({
+  color: 0x41190a,
+  emissive: 0xff5a12,
+  emissiveIntensity: 1.4,
+  roughness: 0.8
+});
+
+let safeRing = null;
+const fireUp = new THREE.Vector3(0, 1, 0);
+
+function addFireLog(group, base, apex, radius, material) {
+  const direction = apex.clone().sub(base);
+  const length = direction.length();
+  if (length < 0.001) return;
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.85, radius, length, 6), material);
+  mesh.position.copy(base).add(apex).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(fireUp, direction.normalize());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+}
+
+function buildCampfireLevel(level) {
+  while (campfireVisual.children.length > 0) {
+    const child = campfireVisual.children.pop();
+    if (child.geometry) child.geometry.dispose();
+  }
+
+  const logCount = level === 1 ? 4 : 6;
+  const leanRadius = level === 1 ? 0.5 : 0.68;
+  const apexHeight = level === 1 ? 1.0 : 1.35;
+  for (let i = 0; i < logCount; i += 1) {
+    const angle = (i / logCount) * Math.PI * 2 + 0.35;
+    addFireLog(
+      campfireVisual,
+      new THREE.Vector3(Math.cos(angle) * leanRadius, 0.08, Math.sin(angle) * leanRadius),
+      new THREE.Vector3(Math.cos(angle) * 0.08, apexHeight, Math.sin(angle) * 0.08),
+      0.105,
+      i % 2 === 0 ? campfireLogMaterial : campfireLogDarkMaterial
+    );
+  }
+
+  if (level >= 2) {
+    for (const side of [-1, 1]) {
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 1.5, 7), campfireLogMaterial);
+      seat.rotation.z = Math.PI / 2;
+      seat.rotation.y = side * 0.28;
+      seat.position.set(side * 1.45, 0.22, side * 0.35);
+      seat.castShadow = true;
+      seat.receiveShadow = true;
+      campfireVisual.add(seat);
+    }
+  }
+
+  if (level >= 3) {
+    const ringRadius = level >= 4 ? 1.95 : 1.45;
+    const stoneCount = level >= 4 ? 12 : 8;
+    for (let i = 0; i < stoneCount; i += 1) {
+      const angle = (i / stoneCount) * Math.PI * 2;
+      const scale = 0.85 + Math.random() * 0.35;
+      const stone = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2 * scale, 0), campfireStoneMaterial);
+      stone.position.set(Math.cos(angle) * ringRadius, 0.15 * scale, Math.sin(angle) * ringRadius);
+      stone.rotation.set(Math.random(), Math.random(), Math.random());
+      stone.castShadow = true;
+      stone.receiveShadow = true;
+      campfireVisual.add(stone);
+    }
+  }
+
+  if (level >= 4) {
+    for (let i = 0; i < 9; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 0.5 + Math.random() * 1.15;
+      const ember = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.11), campfireEmberMaterial);
+      ember.position.set(Math.cos(angle) * radius, 0.05, Math.sin(angle) * radius);
+      ember.rotation.y = Math.random() * Math.PI;
+      campfireVisual.add(ember);
+    }
+  }
+
+  if (level >= 5) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.95, 0.075, 6, 20), campfireIronMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.1;
+    ring.castShadow = true;
+    campfireVisual.add(ring);
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (i / 4) * Math.PI * 2 + 0.4;
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), campfireIronMaterial);
+      brace.position.set(Math.cos(angle) * 1.95, 0.28, Math.sin(angle) * 1.95);
+      brace.rotation.y = -angle;
+      campfireVisual.add(brace);
+    }
+  }
+
+  campfireVisual.scale.setScalar(0.62);
+  state.fireGrow = 0;
+
+  if (fireFlameInner && fireFlameInner.material) {
+    fireFlameInner.material.color.setHex(level >= 5 ? 0xd8f4ff : 0xffe28a);
+  }
+  if (fireFlame && fireFlame.material) {
+    fireFlame.material.color.setHex(level >= 5 ? 0x7ecbff : 0xff7b22);
+  }
+
+  const radius = FIRE_SAFE_RADII[level] || 8;
+  updateSafeRing(radius);
+}
+
+function updateSafeRing(radius) {
+  if (safeRing) {
+    world.remove(safeRing);
+    safeRing.geometry.dispose();
+    safeRing.material.dispose();
+    safeRing = null;
+  }
+  if (!radius || radius <= 0) return;
+  const points = [];
+  const segments = 96;
+  for (let i = 0; i < segments; i += 1) {
+    const angle = (i / segments) * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(angle) * radius, 0.05, Math.sin(angle) * radius));
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineDashedMaterial({
+    color: 0xffb066,
+    transparent: true,
+    opacity: 0.32,
+    dashSize: 0.42,
+    gapSize: 0.36,
+    depthWrite: false
+  });
+  safeRing = new THREE.LineLoop(geometry, material);
+  safeRing.computeLineDistances();
+  safeRing.position.copy(campfire.position);
+  safeRing.renderOrder = 1;
+  world.add(safeRing);
+}
+
+function triggerFireFlash() {
+  fireFlash.classList.remove('flash');
+  void fireFlash.offsetWidth;
+  fireFlash.classList.add('flash');
+}
+
+function showStartHint() {
+  state.startHintTimer = 8;
+  startHint.classList.add('visible');
+}
+
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(110, 24, 24),
   new THREE.MeshBasicMaterial({
@@ -2644,19 +3169,28 @@ const state = {
   idleTime: 0,
   moveSpeed: 0,
   backpack: { wood: 0, sapling: 0, berry: 0, iron: 0 },
-  ownedTools: { axe: true, pickaxe: false, ironAxe: false, ironSword: false },
+  backpackCapacity: DEFAULT_BACKPACK_CAPACITY,
+  goodSack: false,
+  goodAxe: false,
+  ownedTools: { axe: true, pickaxe: false, torch: false, ironAxe: false, ironSword: false },
   equippedTool: null,
   equipTimer: 0,
   inventoryOpen: false,
-  machineOpen: false,
+  craftOpen: false,
   settingsOpen: false,
-  machineInReach: false,
-  fireLevel: 0,
+  grinderInReach: false,
+  benchInReach: false,
+  fireLevel: 1,
+  fireProgress: 50,
+  fireGrow: 0,
+  fireDarken: 0,
+  startHintTimer: 0,
+  craftSelected: 'pickaxe',
+  carriedPlaceable: null,
   dropCooldown: 0,
   starveTimer: 0,
   portrait: false,
   paused: false,
-  fuel: 100,
   fireOut: false,
   fireFlare: 0,
   fireInReach: false,
@@ -2765,35 +3299,73 @@ function updateHud() {
 
   dropBtn.style.display = heldItem ? 'flex' : 'none';
   plantBtn.style.display = heldItem && heldItem.type === 'sapling' ? 'flex' : 'none';
-
-  const fuel = clamp(state.fuel, 0, 100);
-  const fuelPercent = Math.round(fuel);
-  fuelFill.style.width = `${fuel}%`;
-  fuelFill.classList.toggle('low', fuel <= 55 && fuel > 25);
-  fuelFill.classList.toggle('critical', fuel <= 25);
-  fuelText.textContent = `${fuelPercent}%`;
-
-  if (state.fireOut) {
-    statusText.textContent = 'The fire is out!';
-    statusText.style.color = '#ff5d5d';
-  } else if (fuel <= 25) {
-    statusText.textContent = 'Fire almost out';
-    statusText.style.color = '#ff5d5d';
-  } else if (fuel <= 55) {
-    statusText.textContent = 'Fire is low';
-    statusText.style.color = '#ffba58';
-  } else {
-    statusText.textContent = 'Fire is strong';
-    statusText.style.color = '#8aec9b';
-  }
+  updateActionButtons();
+  updateHotbarLabels();
+  updatePlaceButton();
 
   const fireIsOut = state.started && state.fireOut;
   fireWarning.classList.toggle('visible', fireIsOut);
 
-  backpackBadge.textContent = `${backpackCount()}/${BACKPACK_CAPACITY}`;
-  inventoryCapacity.textContent = `${backpackCount()} / ${BACKPACK_CAPACITY}`;
+  updateFireHud();
+
+  backpackBadge.textContent = `${backpackCount()}/${state.backpackCapacity}`;
+  inventoryCapacity.textContent = `${backpackCount()} / ${state.backpackCapacity}`;
   updateToolUi();
   renderInventory();
+}
+
+function updateActionButtons() {
+  const label = dropBtn.querySelector('span');
+  if (!label) return;
+  let text = 'DROP';
+  let mode = '';
+  if (heldItem) {
+    const nearGrinder = getGrinderDistance() <= GRINDER_RANGE;
+    const nearFire = getCampfireDistance() <= FIRE_FEED_RANGE;
+    if (nearGrinder) {
+      if (heldItem.type === 'wood' || heldItem.type === 'iron') {
+        text = 'PUT IN GRINDER';
+        mode = 'grinder';
+      } else {
+        text = "CAN'T GRIND THIS";
+        mode = 'blocked';
+      }
+    } else if (nearFire) {
+      if (heldItem.type === 'wood') {
+        text = 'PUT IN FIRE';
+        mode = 'fire';
+      } else {
+        text = 'ONLY LOGS BURN';
+        mode = 'blocked';
+      }
+    }
+  }
+  label.textContent = text;
+  dropBtn.classList.toggle('action-ready', mode === 'grinder' || mode === 'fire');
+  dropBtn.classList.toggle('action-blocked', mode === 'blocked');
+}
+
+function updateFireHud() {
+  const level = state.fireLevel;
+  const progress = clamp(state.fireProgress, 0, 100);
+  if (level >= FIRE_LEVEL_MAX) {
+    fireCounterText.textContent = `level ${level} progress: MAX`;
+    fireCounterFill.style.width = '100%';
+  } else {
+    fireCounterText.textContent = `level ${level} progress: ${Math.round(progress)}/100`;
+    fireCounterFill.style.width = `${progress}%`;
+  }
+  let color = '#3fbf73';
+  let glow = 'rgba(95, 232, 139, 0.55)';
+  if (progress < 20) {
+    color = '#e04b3f';
+    glow = 'rgba(240, 90, 72, 0.55)';
+  } else if (progress < 50) {
+    color = '#f0c144';
+    glow = 'rgba(250, 205, 95, 0.55)';
+  }
+  fireCounterFill.style.background = `linear-gradient(90deg, ${color}, ${color})`;
+  fireCounterFill.style.boxShadow = `0 0 10px ${glow}`;
 }
 
 function updateToolUi() {
@@ -2801,13 +3373,15 @@ function updateToolUi() {
     ['axe', axeSlot],
     ['backpack', backpackSlot],
     ['pickaxe', pickaxeSlot],
-    ['ironAxe', ironAxeSlot],
+    ['torch', torchSlot],
     ['ironSword', ironSwordSlot]
   ];
 
   for (const [tool, slot] of slots) {
     const owned = tool === 'backpack' || !!state.ownedTools[tool];
-    const equipped = state.equippedTool === tool;
+    const equipped = tool === 'axe'
+      ? state.equippedTool === 'axe' || state.equippedTool === 'ironAxe'
+      : state.equippedTool === tool;
     slot.classList.toggle('hidden', !owned);
     slot.classList.toggle('equipped', equipped);
     slot.setAttribute('aria-pressed', String(equipped));
@@ -2887,7 +3461,7 @@ function setInventoryOpen(open) {
   state.inventoryOpen = open;
   inventoryPanel.classList.toggle('hidden', !open);
   if (open) {
-    closeMachinePanel();
+    closeCraftPanel();
     setSettingsOpen(false);
     toastTimer = 0;
     toastEl.classList.remove('visible');
@@ -2937,7 +3511,7 @@ function equipTool(tool) {
     state.equippedTool = tool;
   }
 
-  closeMachinePanel();
+  closeCraftPanel();
   setSettingsOpen(false);
   if (state.equippedTool !== 'backpack') setInventoryOpen(false);
   state.equipTimer = state.equippedTool ? EQUIP_TIME : 0;
@@ -2950,7 +3524,7 @@ function unequipTool() {
   state.equippedTool = null;
   state.equipTimer = 0;
   setInventoryOpen(false);
-  closeMachinePanel();
+  closeCraftPanel();
   playEquipClick();
   updateHud();
   updateToolModels();
@@ -2961,6 +3535,7 @@ function getHeldToolModel() {
     case 'axe': return axe;
     case 'backpack': return handBackpack;
     case 'pickaxe': return heldPickaxe;
+    case 'torch': return heldTorch;
     case 'ironAxe': return heldIronAxe;
     case 'ironSword': return heldIronSword;
     default: return null;
@@ -2971,6 +3546,7 @@ function updateToolModels() {
   axe.visible = state.equippedTool === 'axe';
   handBackpack.visible = state.equippedTool === 'backpack';
   heldPickaxe.visible = state.equippedTool === 'pickaxe';
+  heldTorch.visible = state.equippedTool === 'torch';
   heldIronAxe.visible = state.equippedTool === 'ironAxe';
   heldIronSword.visible = state.equippedTool === 'ironSword';
   lantern.visible = !state.equippedTool;
@@ -3101,7 +3677,7 @@ const activePointers = new Map();
 
 function isUiTarget(target) {
   return !!(target && target.closest && target.closest(
-    'button, #inventoryPanel, #upgradePanel, #settingsPanel, #startOverlay, '
+    'button, #inventoryPanel, #craftPanel, #settingsPanel, #startOverlay, '
     + '#rotateOverlay, #audioControls, #hotbar, #actionCluster, #joystickZone'
   ));
 }
@@ -3115,7 +3691,7 @@ function isOverHud(clientX, clientY) {
 
 function interactionBlocked() {
   return !state.started || state.gameOver || state.falling || state.portrait
-    || state.inventoryOpen || state.machineOpen || state.settingsOpen;
+    || state.inventoryOpen || state.craftOpen || state.settingsOpen;
 }
 
 window.addEventListener('pointerdown', (event) => {
@@ -3234,19 +3810,27 @@ function startGame() {
   state.backpack.iron = 0;
   state.ownedTools.axe = true;
   state.ownedTools.pickaxe = false;
+  state.ownedTools.torch = false;
   state.ownedTools.ironAxe = false;
   state.ownedTools.ironSword = false;
+  state.goodSack = false;
+  state.goodAxe = false;
+  state.backpackCapacity = DEFAULT_BACKPACK_CAPACITY;
   state.equippedTool = null;
   state.equipTimer = 0;
   state.inventoryOpen = false;
-  state.machineOpen = false;
+  state.craftOpen = false;
   state.settingsOpen = false;
-  state.machineInReach = false;
-  state.fireLevel = 0;
+  state.benchInReach = false;
+  state.fireLevel = 1;
+  state.fireProgress = 50;
+  state.fireGrow = 0;
+  state.fireDarken = 0;
+  state.startHintTimer = 8;
+  state.carriedPlaceable = null;
   state.targetRock = null;
   state.dropCooldown = 0;
   state.starveTimer = 0;
-  state.fuel = 100;
   state.fireOut = false;
   state.fireFlare = 0;
   state.chopTimer = 0;
@@ -3259,18 +3843,20 @@ function startGame() {
   toastEl.classList.remove('visible');
   hideHitMeter();
   setInventoryOpen(false);
-  closeMachinePanel();
+  closeCraftPanel();
   setSettingsOpen(false);
-  campfire.scale.setScalar(1);
-  fireGlow.distance = 15;
-  warmLight.distance = 20;
-  machineState.fuel = 0;
-  machineState.working = null;
-  machineState.progress = 0;
-  machineState.stalled = false;
-  machineState.statusTimer = 0;
-  machineState.statusText = '';
-  stopMachineSound();
+
+  benchState.stock.wood = 0;
+  benchState.stock.iron = 0;
+  benchState.tier = 1;
+  benchState.crafted.clear();
+  updateBenchVisuals();
+  resetBearTraps();
+  updatePlaceButton();
+  buildCampfireLevel(1);
+  updateSafeRing(getCampfireSafeRadius());
+  state.craftSelected = 'pickaxe';
+
   resetPlacedWalls();
   resetIronRocks();
   player.position.set(0, getGroundHeight(0, -3.5), -3.5);
@@ -3306,6 +3892,8 @@ function startGame() {
 
   fireWarning.classList.remove('visible');
   deathBanner.classList.remove('visible');
+  benchPrompt.classList.add('hidden');
+  fireFlash.classList.remove('flash');
   darkness.style.opacity = '0';
   for (const enemy of enemies) {
     enemy.visible = false;
@@ -3316,8 +3904,10 @@ function startGame() {
   strikeArc.visible = false;
   hitEffect.visible = false;
   updateToolModels();
+  updateHotbarLabels();
   updateHud();
-  showToast('Tap a tool · loose iron by the machine');
+  showStartHint();
+  showToast('Tap a tool · loose iron by the bench');
 }
 
 startBtn.addEventListener('click', startGame);
@@ -3329,13 +3919,13 @@ window.addEventListener('keydown', (event) => {
   if (blockedKeys.has(key)) event.preventDefault();
   if (key === 'q' && !event.repeat) plantSapling();
   if (key === 'f' && !event.repeat) dropCarriedItems();
-  if (key === '1' && !event.repeat) equipTool('axe');
+  if (key === '1' && !event.repeat) equipTool(state.ownedTools.ironAxe ? 'ironAxe' : 'axe');
   if (key === '2' && !event.repeat) equipTool('backpack');
   if (key === '3' && !event.repeat) equipTool('pickaxe');
-  if (key === '4' && !event.repeat) equipTool('ironAxe');
+  if (key === '4' && !event.repeat) equipTool('torch');
   if (key === '5' && !event.repeat) equipTool('ironSword');
   if (key === 'escape' && !event.repeat) {
-    closeMachinePanel();
+    closeCraftPanel();
     setSettingsOpen(false);
     setInventoryOpen(false);
   }
@@ -3367,7 +3957,7 @@ plantBtn.addEventListener('pointerdown', (event) => {
 
 axeSlot.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  equipTool('axe');
+  equipTool(state.ownedTools.ironAxe ? 'ironAxe' : 'axe');
 });
 
 backpackSlot.addEventListener('pointerdown', (event) => {
@@ -3380,9 +3970,9 @@ pickaxeSlot.addEventListener('pointerdown', (event) => {
   equipTool('pickaxe');
 });
 
-ironAxeSlot.addEventListener('pointerdown', (event) => {
+torchSlot.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  equipTool('ironAxe');
+  equipTool('torch');
 });
 
 ironSwordSlot.addEventListener('pointerdown', (event) => {
@@ -3390,15 +3980,21 @@ ironSwordSlot.addEventListener('pointerdown', (event) => {
   equipTool('ironSword');
 });
 
-closeUpgradeBtn.addEventListener('pointerdown', (event) => {
+closeCraftBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  closeMachinePanel();
+  closeCraftPanel();
 });
 
-machineFeedBtn.addEventListener('pointerdown', (event) => {
+craftButton.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   event.stopPropagation();
-  addMachineFuel();
+  craftSelectedRecipe();
+});
+
+placeBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  placeCarried();
 });
 
 closeInventoryBtn.addEventListener('pointerdown', (event) => {
@@ -3467,7 +4063,8 @@ function resolveTapOwner(object) {
     if (data.enemyRef) return { kind: 'enemy', enemy: data.enemyRef };
     if (data.saplingRef) return { kind: 'sapling', sapling: data.saplingRef };
     if (data.berryBushRef) return { kind: 'berry', bush: data.berryBushRef };
-    if (data.machineRef) return { kind: 'machine' };
+    if (data.benchRef) return { kind: 'bench' };
+    if (data.grinderRef) return { kind: 'grinder' };
     if (data.campfireRef) return { kind: 'campfire' };
     node = node.parent;
   }
@@ -3555,14 +4152,20 @@ function applyTapInteraction(owner) {
       harvestBerryBush(bush);
       return;
     }
-    case 'machine': {
-      if (getMachineDistance() > TAP_REACH) return tooFar();
-      if (getMachineDistance() > MACHINE_INTERACT_RANGE) {
-        showToast('Move closer to the machine');
+    case 'bench': {
+      if (getBenchDistance() > TAP_REACH) return tooFar();
+      if (getBenchDistance() > BENCH_INTERACT_RANGE) {
+        showToast('Move closer to the bench');
         return;
       }
-      flashOutline(machine);
-      openMachinePanel();
+      flashOutline(bench);
+      openCraftPanel();
+      return;
+    }
+    case 'grinder': {
+      if (getGrinderDistance() > TAP_REACH) return tooFar();
+      flashOutline(grinder);
+      showToast('Hold a log or iron and press Drop');
       return;
     }
     case 'campfire': {
@@ -3626,7 +4229,7 @@ function harvestBerryBush(bush) {
   bush.nextHarvest = now + 4500;
 
   if (isBackpackEquipped()) {
-    if (backpackCount() >= BACKPACK_CAPACITY) {
+    if (backpackCount() >= state.backpackCapacity) {
       showToast('Backpack is full');
       return;
     }
@@ -3650,16 +4253,11 @@ function harvestBerryBush(bush) {
 }
 
 function tapCampfire() {
-  const carriedFuel = heldItem && FIRE_FUEL_TYPES.has(heldItem.type);
-  if (carriedFuel) {
-    throwCarriedIntoFire();
+  if (state.fireOut) {
+    showToast('The fire is out — hold a log and press Drop');
     return;
   }
-  if (backpackFuelCount() > 0) {
-    feedFireFromBackpack();
-    return;
-  }
-  showToast(state.fuel >= 99.5 ? 'The fire is already full' : 'Add wood to feed the fire');
+  showToast('Hold a log and press Drop to feed the fire');
 }
 
 function setJumpHeld(held) {
@@ -3690,9 +4288,8 @@ function resetToMenu(title, subtitle, hint, buttonText) {
   deathBanner.classList.remove('visible');
   toastEl.classList.remove('visible');
   setInventoryOpen(false);
-  closeMachinePanel();
+  closeCraftPanel();
   setSettingsOpen(false);
-  stopMachineSound();
   state.equippedTool = null;
   state.equipTimer = 0;
   updateToolModels();
@@ -3701,7 +4298,7 @@ function resetToMenu(title, subtitle, hint, buttonText) {
 }
 
 function attack(targetEnemy = null) {
-  if (!state.started || state.gameOver || state.falling || state.paused || state.machineOpen || state.settingsOpen) return;
+  if (!state.started || state.gameOver || state.falling || state.paused || state.craftOpen || state.settingsOpen) return;
   if (state.attackCooldown > 0) return;
   const stats = TOOL_STATS[state.equippedTool];
   if (!['axe', 'ironAxe', 'ironSword'].includes(state.equippedTool) || !stats) return;
@@ -3795,7 +4392,7 @@ function beginFalling() {
   state.attackTimer = 0;
   strikeArc.visible = false;
   setInventoryOpen(false);
-  closeMachinePanel();
+  closeCraftPanel();
   deathBanner.classList.add('visible');
   playSadTone();
   updateHud();
@@ -3878,7 +4475,7 @@ const GRAVITY = 17.5;
 
 function tryJump() {
   if (!state.started || state.gameOver || state.falling || !state.grounded
-    || state.machineOpen || state.settingsOpen || state.inventoryOpen) return;
+    || state.craftOpen || state.settingsOpen || state.inventoryOpen) return;
   state.velocityY = JUMP_SPEED;
   state.grounded = false;
   playJumpSound();
@@ -4133,7 +4730,7 @@ function updateAvatar(delta) {
 function updateEnemies(delta) {
   if (!state.started || state.gameOver) return;
 
-  const fireStrong = !state.fireOut && state.fuel > FIRE_STRONG_FUEL;
+  const fireStrong = !state.fireOut;
 
   for (const enemy of enemies) {
     const data = enemy.userData;
@@ -4169,6 +4766,12 @@ function updateEnemies(delta) {
       data.knockback.multiplyScalar(Math.exp(-9 * delta));
     }
 
+    let stunned = false;
+    if (data.stunTimer > 0) {
+      data.stunTimer = Math.max(0, data.stunTimer - delta);
+      stunned = true;
+    }
+
     const playerDistance = Math.hypot(
       player.position.x - enemy.position.x,
       player.position.z - enemy.position.z
@@ -4188,7 +4791,7 @@ function updateEnemies(delta) {
     let stepZ = 0;
     let walking = false;
 
-    if (targetDistance > 0.35) {
+    if (targetDistance > 0.35 && !stunned) {
       stepX = (dx / targetDistance) * data.speed * delta;
       stepZ = (dz / targetDistance) * data.speed * delta;
       walking = true;
@@ -4258,7 +4861,7 @@ function updateEnemies(delta) {
       player.position.x - enemy.position.x,
       player.position.z - enemy.position.z
     );
-    if (touchDistance < 1.45 && Math.abs(player.position.y - enemy.position.y) < 2.2) {
+    if (!stunned && touchDistance < 1.45 && Math.abs(player.position.y - enemy.position.y) < 2.2) {
       if (data.attackCooldown <= 0 && state.invuln <= 0) {
         damagePlayer(data.damage);
         data.attackCooldown = 1.05;
@@ -4286,17 +4889,34 @@ function updateVitals(delta) {
 }
 
 function updateCampfire(delta) {
-  if (state.started && !state.gameOver) {
-    state.fuel = Math.max(0, state.fuel - delta * FUEL_DRAIN_PER_SECOND);
-    state.fireFlare = Math.max(0, state.fireFlare - delta * 1.8);
-    if (state.fuel <= 0) state.fireOut = true;
+  if (state.started && !state.gameOver && !state.fireOut) {
+    const drainPerSecond = (FIRE_DRAIN_PER_MINUTE[state.fireLevel] || 1) / 60;
+    state.fireProgress = Math.max(0, state.fireProgress - drainPerSecond * delta);
+    if (state.fireProgress <= 0) {
+      state.fireProgress = 0;
+      state.fireOut = true;
+      state.fireFlare = 0;
+      fireWarning.classList.add('visible');
+      showToast('The fire is out!');
+      playFireOutTone();
+    }
   }
 
-  const ratio = clamp(state.fuel / 100, 0, 1);
-  const safe = getCampfireInfluence() > 0;
+  state.fireFlare = Math.max(0, state.fireFlare - delta * 1.6);
+
+  const burning = !state.fireOut;
+  const ratio = clamp(state.fireProgress / 100, 0, 1);
+  const safe = state.started && !state.gameOver && !state.fireOut && getCampfireInfluence() > 0;
   state.nearFire = safe;
-  if (safe && state.started && !state.gameOver && !state.falling && !state.fireOut) {
+  if (safe && !state.falling) {
     state.health = clamp(state.health + delta * 3, 0, 100);
+  }
+
+  const nightFactor = 1 - state.daylight;
+  if (state.started && state.fireOut && nightFactor > 0.5) {
+    state.fireDarken = Math.min(1, state.fireDarken + delta * 0.045);
+  } else {
+    state.fireDarken = Math.max(0, state.fireDarken - delta * 0.6);
   }
 
   spawnBurst.visible = spawnBurst.visible && spawnBurst.intensity > 0.1;
@@ -4306,46 +4926,77 @@ function updateCampfire(delta) {
 
   const t = performance.now() * 0.001;
   const flicker = 0.85 + Math.sin(t * 17.3) * 0.12 + Math.sin(t * 29.7 + 0.7) * 0.08;
-  const burning = !state.fireOut;
+  const growRate = 1 - Math.exp(-7 * delta);
+  state.fireGrow = Math.min(1, state.fireGrow + growRate * 1.4);
+  const growScale = 0.62 + state.fireGrow * 0.38;
+  campfireVisual.scale.setScalar(growScale);
 
   fireCore.visible = burning;
   fireFlame.visible = burning;
   fireFlameInner.visible = burning;
   fireSparks.visible = burning;
 
+  emberBed.material.emissiveIntensity = burning ? 0.25 + ratio * 0.55 : 0.7 + Math.sin(t * 3) * 0.15;
+
+  if (safeRing) {
+    safeRing.visible = burning && state.started;
+    if (safeRing.material) {
+      safeRing.material.opacity = 0.2 + Math.sin(t * 1.6) * 0.06 + (burning ? 0.08 : 0);
+    }
+  }
+
   if (burning) {
-    const size = 0.55 + ratio * 0.45;
-    fireCore.scale.setScalar((0.8 + ratio * 0.45) * (1 + Math.sin(t * 12) * 0.08));
-    fireCore.position.y = 0.55 + Math.sin(t * 6) * 0.04;
+    const height = FIRE_FLAME_HEIGHTS[state.fireLevel] || 1;
+    const width = 0.42 + height * 0.24;
+    const sway = Math.sin(t * 9) * 0.06;
+    const flare = state.fireFlare;
+
+    fireCore.scale.setScalar((0.7 + ratio * 0.35) * (1 + Math.sin(t * 12) * 0.08) + flare * 0.4);
+    fireCore.position.y = 0.42 + Math.sin(t * 6) * 0.04;
     fireCore.rotation.y += delta * 2.4;
 
-    const flameHeight = 1.5 * size;
-    fireFlame.scale.setScalar(size * (0.9 + Math.sin(t * 9) * 0.1));
-    fireFlame.position.y = 0.4 + flameHeight * 0.5 + Math.sin(t * 8.5) * 0.04;
+    const scaleY = (height / 1.5) * (0.95 + Math.sin(t * 8.5) * 0.08 + flare * 0.35);
+    fireFlame.scale.set(width * (0.92 + Math.sin(t * 7.7) * 0.06), scaleY, width * (0.92 + Math.cos(t * 7.1) * 0.06));
+    fireFlame.position.y = 0.2 + height * 0.5 + Math.sin(t * 8.5) * 0.05;
     fireFlame.rotation.y += delta * 1.9;
-    fireFlame.rotation.z = Math.sin(t * 3.1) * 0.08;
+    fireFlame.rotation.z = sway;
 
-    const innerHeight = 1.05 * size;
-    fireFlameInner.scale.setScalar(size * (0.92 + Math.sin(t * 14) * 0.1));
-    fireFlameInner.position.y = 0.42 + innerHeight * 0.5 + Math.sin(t * 10 + 1) * 0.03;
-    fireFlameInner.rotation.z = Math.sin(t * 4.7 + 1) * 0.07;
+    const innerScaleY = (height / 1.5) * (0.88 + Math.sin(t * 14) * 0.09 + flare * 0.3);
+    fireFlameInner.scale.set(width * 0.5, innerScaleY, width * 0.5);
+    fireFlameInner.position.y = 0.18 + height * 0.44 + Math.sin(t * 10 + 1) * 0.04;
+    fireFlameInner.rotation.z = -sway * 0.8;
 
-    fireGlow.intensity = (2 + ratio * 1.8 + state.fireLevel * 0.55) * flicker + state.fireFlare * 3.2;
-    warmLight.intensity = (0.6 + ratio * 0.8 + state.fireLevel * 0.28) * flicker + state.fireFlare * 1.8;
-    sparkMaterial.opacity = 0.55 + ratio * 0.3 + Math.sin(t * 13) * 0.1;
-    updateSparks(delta, ratio);
+    fireGlow.intensity = (1.5 + height * 0.75 + ratio * 0.7) * flicker + flare * 4;
+    fireGlow.distance = 9 + height * 3.6;
+    warmLight.intensity = (0.5 + height * 0.28 + ratio * 0.45) * flicker + flare * 2.2;
+    warmLight.distance = 14 + height * 3.2;
+    sparkMaterial.size = 0.055 + (state.fireLevel - 1) * 0.008;
+    sparkMaterial.opacity = 0.5 + ratio * 0.3 + Math.sin(t * 13) * 0.1;
+    updateSparks(delta, clamp(0.2 + ratio, 0, 1));
+
+    if (state.fireLevel >= 5) {
+      smokePuffs.forEach((puff, i) => {
+        const phase = (t * 0.3 + i / smokePuffs.length) % 1;
+        puff.position.set(Math.sin(t * 0.8 + i) * 0.12, 1.7 + phase * 4.2, Math.cos(t * 0.7 + i) * 0.12);
+        puff.scale.setScalar(0.9 + phase * 2.2);
+        puff.material.opacity = 0.11 * (1 - phase);
+      });
+    }
   } else {
     fireGlow.intensity = 0;
     warmLight.intensity = 0;
     sparkGeometry.setDrawRange(0, 0);
+    smokePuffs.forEach((puff) => { puff.material.opacity = 0; });
   }
 
-  for (let i = 0; i < smokePuffs.length; i += 1) {
-    const puff = smokePuffs[i];
-    const phase = (t * 0.42 + i / smokePuffs.length) % 1;
-    puff.position.set(Math.sin(t * 1.4 + i) * 0.14, 1.5 + phase * 1.8, Math.cos(t * 1.2 + i) * 0.12);
-    puff.scale.setScalar(0.6 + phase * 1.05);
-    puff.material.opacity = burning ? 0.09 * (1 - phase) : 0;
+  if (burning && state.fireLevel < 5) {
+    for (let i = 0; i < smokePuffs.length; i += 1) {
+      const puff = smokePuffs[i];
+      const phase = (t * 0.42 + i / smokePuffs.length) % 1;
+      puff.position.set(Math.sin(t * 1.4 + i) * 0.14, 1.5 + phase * 1.8, Math.cos(t * 1.2 + i) * 0.12);
+      puff.scale.setScalar(0.6 + phase * 1.05);
+      puff.material.opacity = 0.09 * (1 - phase);
+    }
   }
 
   if (state.started && !state.gameOver && state.health > 0) {
@@ -4385,8 +5036,10 @@ function applyDayNightVisuals() {
 
   phaseIcon.classList.toggle('night', nightFactor > 0.5);
 
-  const fireOutExtra = state.started && state.fireOut ? 0.1 : 0;
-  darkness.style.opacity = String(clamp(nightFactor * 0.3 + fireOutExtra, 0, 0.85));
+  const fireOutExtra = state.started && state.fireOut
+    ? 0.1 + state.fireDarken * 0.4
+    : 0;
+  darkness.style.opacity = String(clamp(nightFactor * 0.3 + fireOutExtra, 0, 0.9));
 }
 
 function updateDayNight(delta) {
@@ -4502,8 +5155,11 @@ function updateCamera(delta = 0.016) {
       cameraCandidates.push(wall.group);
     }
   }
-  if (Math.hypot(machine.position.x - cameraPivot.x, machine.position.z - cameraPivot.z) < broadRadius) {
-    cameraCandidates.push(machine);
+  if (Math.hypot(bench.position.x - cameraPivot.x, bench.position.z - cameraPivot.z) < broadRadius) {
+    cameraCandidates.push(bench);
+  }
+  if (Math.hypot(grinder.position.x - cameraPivot.x, grinder.position.z - cameraPivot.z) < broadRadius) {
+    cameraCandidates.push(grinder);
   }
 
   let distance = fullDistance;
@@ -4565,6 +5221,44 @@ function updateCamera(delta = 0.016) {
   if (firstPersonActive) strikeArc.visible = false;
 }
 
+// ---------- World-space HUD prompts ----------
+
+const promptVec = new THREE.Vector3();
+
+function projectPrompt(element, worldPos) {
+  promptVec.copy(worldPos).project(camera);
+  if (promptVec.z > 1) return false;
+  const x = (promptVec.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (-promptVec.y * 0.5 + 0.5) * window.innerHeight;
+  element.style.left = `${x}px`;
+  element.style.top = `${y}px`;
+  return true;
+}
+
+function updateWorldPrompts(delta) {
+  if (state.startHintTimer > 0) {
+    state.startHintTimer = Math.max(0, state.startHintTimer - delta);
+    if (state.startHintTimer <= 0) startHint.classList.remove('visible');
+  }
+
+  camera.updateMatrixWorld();
+
+  const showFire = state.started && !state.gameOver && !state.portrait;
+  fireCounter.classList.toggle('visible', showFire);
+  if (showFire) {
+    const target = new THREE.Vector3(campfire.position.x, campfire.position.y + 3, campfire.position.z);
+    fireCounter.style.visibility = projectPrompt(fireCounter, target) ? 'visible' : 'hidden';
+  }
+
+  const showBench = state.started && !state.gameOver && !state.portrait
+    && !state.craftOpen && getBenchDistance() <= BENCH_PROMPT_RANGE;
+  benchPrompt.classList.toggle('hidden', !showBench);
+  if (showBench) {
+    const target = new THREE.Vector3(bench.position.x, bench.position.y + 1.75, bench.position.z);
+    if (!projectPrompt(benchPrompt, target)) benchPrompt.classList.add('hidden');
+  }
+}
+
 // ---------- Generated audio ----------
 
 const audio = {
@@ -4583,10 +5277,6 @@ const audio = {
   growlTimer: 1.8,
   monsterStepTimer: 0.5,
   heartbeatTimer: 0,
-  machineRunning: false,
-  machineOsc: null,
-  machineOsc2: null,
-  machineGain: null
 };
 
 function audioReady() {
@@ -4735,6 +5425,30 @@ function playUpgradeDing() {
   playTone(2093, 2093, 0.4, 'triangle', 0.014, 0.03);
 }
 
+function playGrinderSound() {
+  playNoise(0.34, 0.065, 'lowpass', 520, 150, 0.7);
+  playTone(150, 82, 0.32, 'sawtooth', 0.03);
+  playTone(76, 52, 0.28, 'square', 0.022, 0.03);
+}
+
+function playErrorTone() {
+  playTone(240, 150, 0.16, 'square', 0.03);
+}
+
+function playFireLevelChime() {
+  const notes = [392, 523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((freq, index) => {
+    playTone(freq, freq, 0.5, 'triangle', 0.042, index * 0.09);
+    playTone(freq * 2, freq * 2, 0.3, 'sine', 0.012, index * 0.09 + 0.01);
+  });
+}
+
+function playFireOutTone() {
+  playTone(320, 180, 0.5, 'sine', 0.04);
+  playTone(180, 90, 0.7, 'triangle', 0.03, 0.08);
+  playNoise(0.5, 0.03, 'lowpass', 500, 120);
+}
+
 function playNightSurvivedChime() {
   const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
   notes.forEach((freq, index) => {
@@ -4844,60 +5558,6 @@ function playHeartbeat(proximity) {
   playTone(52, 38, 0.12, 'sine', gain * 0.7, 0.16);
 }
 
-function playMachineClank() {
-  playNoise(0.04, 0.02, 'highpass', 1700, 0, 1.2);
-  playTone(390, 330, 0.06, 'square', 0.012);
-}
-
-function startMachineSound() {
-  if (!audioReady() || audio.machineRunning) return;
-  try {
-    const ctx = audio.ctx;
-    const osc = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.value = 55;
-    osc2.type = 'square';
-    osc2.frequency.value = 82.5;
-    filter.type = 'lowpass';
-    filter.frequency.value = 230;
-    filter.Q.value = 0.7;
-    gain.gain.setValueAtTime(0.0001, audioNow());
-    gain.gain.linearRampToValueAtTime(0.018, audioNow() + 0.18);
-    osc.connect(filter);
-    osc2.connect(filter);
-    filter.connect(gain).connect(audio.master);
-    osc.start();
-    osc2.start();
-    audio.machineOsc = osc;
-    audio.machineOsc2 = osc2;
-    audio.machineGain = gain;
-    audio.machineRunning = true;
-  } catch (error) {
-    audio.machineRunning = false;
-  }
-}
-
-function stopMachineSound() {
-  if (!audio.machineRunning) return;
-  audio.machineRunning = false;
-  try {
-    const now = audioNow();
-    audio.machineGain.gain.cancelScheduledValues(now);
-    audio.machineGain.gain.setValueAtTime(Math.max(0.0001, audio.machineGain.gain.value), now);
-    audio.machineGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-    audio.machineOsc.stop(now + 0.2);
-    audio.machineOsc2.stop(now + 0.2);
-  } catch (error) {
-    // The machine oscillators may already have stopped; ignore cleanup errors.
-  }
-  audio.machineOsc = null;
-  audio.machineOsc2 = null;
-  audio.machineGain = null;
-}
-
 function updateAudioToggleUi() {
   audioToggle.classList.toggle('muted', audio.muted);
   audioToggle.setAttribute('aria-pressed', String(audio.muted));
@@ -4932,7 +5592,7 @@ function setSettingsOpen(open) {
   settingsPanel.classList.toggle('hidden', !open);
   settingsBtn.setAttribute('aria-expanded', String(open));
   if (open) {
-    closeMachinePanel();
+    closeCraftPanel();
     setInventoryOpen(false);
   }
   updateToolUi();
@@ -4955,9 +5615,10 @@ function updateAudio(delta) {
   const fireDistance = getCampfireDistance();
   const fireProximity = clamp(1 - fireDistance / 18, 0, 1);
   const fireBurning = state.started && !state.fireOut && !state.gameOver;
-  const fireRatio = clamp(state.fuel / 100, 0, 1);
+  const fireRatio = clamp(state.fireProgress / 100, 0, 1);
+  const levelBoost = 1 + (state.fireLevel - 1) * 0.22;
   audio.fireGain.gain.setTargetAtTime(
-    fireBurning ? (0.004 + fireProximity * 0.042) * (0.45 + fireRatio * 0.55) : 0.0001,
+    fireBurning ? (0.004 + fireProximity * 0.042) * (0.45 + fireRatio * 0.55) * levelBoost : 0.0001,
     now,
     0.35
   );
@@ -5035,7 +5696,6 @@ function updateAudio(delta) {
     audio.heartbeatTimer = 0;
   }
 
-  if ((!running || state.falling > 0) && audio.machineRunning) stopMachineSound();
 }
 
 window.addEventListener('pointerdown', initAudio, { capture: true, passive: true });
@@ -5146,7 +5806,8 @@ function animate() {
       updateGroundItems(delta);
       updatePlantedSaplings(delta);
       updateCampfire(delta);
-      updateMachine(delta);
+      updateGrinder(delta);
+      updateBearTraps(delta);
       updateIronRocks(delta);
       updateHud();
     } else {
@@ -5174,6 +5835,7 @@ function animate() {
   updateAudio(delta);
   applyDayNightVisuals();
   updateCamera(delta);
+  updateWorldPrompts(delta);
   updateHitMeter(delta);
   renderer.render(scene, camera);
 }
@@ -5186,6 +5848,9 @@ window.addEventListener('resize', () => {
 
 regrowBerries();
 spawnStarterIron();
+buildCampfireLevel(1);
+if (safeRing) safeRing.visible = false;
+updateHotbarLabels();
 updateHud();
 applyDayNightVisuals();
 if (import.meta.env.DEV) {
@@ -5231,20 +5896,30 @@ if (import.meta.env.DEV) {
     startGame,
     showToast,
     ironRocks,
-    machine,
-    machineState,
+    bench,
+    grinder,
+    benchState,
+    RECIPES,
     placedWalls,
-    UPGRADES,
-    startUpgrade,
-    addMachineFuel,
+    placedTraps,
     mineIronRock,
-    updateMachine,
-    updateMachinePanel,
+    updateGrinder,
+    updateBearTraps,
     updateIronRocks,
-    openMachinePanel,
-    closeMachinePanel,
+    openCraftPanel,
+    closeCraftPanel,
+    craftSelectedRecipe,
+    selectRecipe,
+    placeCarried,
+    spawnWall,
+    spawnBearTrap,
+    putInGrinder,
+    putLogInFire,
+    addFireProgress,
+    levelUpCampfire,
+    buildCampfireLevel,
+    updateCampfire,
     setSettingsOpen,
-    applyBiggerCampfire,
     createIronWall,
     resolveWorldPropCollisions,
     audio,
