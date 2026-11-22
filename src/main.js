@@ -7,7 +7,6 @@ const nightText = document.getElementById('nightText');
 const phaseIcon = document.getElementById('phaseIcon');
 const healthText = document.getElementById('healthText');
 const healthFill = document.getElementById('healthFill');
-const statusText = document.getElementById('statusText');
 const joystickZone = document.getElementById('joystickZone');
 const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
@@ -19,8 +18,13 @@ const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
 const berryText = document.getElementById('berryText');
 const ironText = document.getElementById('ironText');
-const fuelText = document.getElementById('fuelText');
-const fuelFill = document.getElementById('fuelFill');
+const fireCounter = document.getElementById('fireCounter');
+const fireCounterText = document.getElementById('fireCounterText');
+const fireCounterFill = document.getElementById('fireCounterFill');
+const startHint = document.getElementById('startHint');
+const fireFlash = document.getElementById('fireFlash');
+const benchPrompt = document.getElementById('benchPrompt');
+const placeBtn = document.getElementById('placeBtn');
 const hungerText = document.getElementById('hungerText');
 const hungerFill = document.getElementById('hungerFill');
 const fireWarning = document.getElementById('fireWarning');
@@ -36,25 +40,31 @@ const startBtn = document.getElementById('startBtn');
 const axeSlot = document.getElementById('axeSlot');
 const backpackSlot = document.getElementById('backpackSlot');
 const pickaxeSlot = document.getElementById('pickaxeSlot');
-const ironAxeSlot = document.getElementById('ironAxeSlot');
+const torchSlot = document.getElementById('torchSlot');
 const ironSwordSlot = document.getElementById('ironSwordSlot');
+const axeLabel = document.getElementById('axeLabel');
+const backpackLabel = document.getElementById('backpackLabel');
+const pickaxeLabel = document.getElementById('pickaxeLabel');
+const torchLabel = document.getElementById('torchLabel');
+const ironSwordLabel = document.getElementById('ironSwordLabel');
 const backpackBadge = document.getElementById('backpackBadge');
 const inventoryPanel = document.getElementById('inventoryPanel');
 const inventoryList = document.getElementById('inventoryList');
 const inventoryCapacity = document.getElementById('inventoryCapacity');
 const closeInventoryBtn = document.getElementById('closeInventoryBtn');
 const unequipBtn = document.getElementById('unequipBtn');
-const upgradePanel = document.getElementById('upgradePanel');
-const upgradeGrid = document.getElementById('upgradeGrid');
-const closeUpgradeBtn = document.getElementById('closeUpgradeBtn');
-const machineStatus = document.getElementById('machineStatus');
-const machineFuelText = document.getElementById('machineFuelText');
-const machineFuelFill = document.getElementById('machineFuelFill');
-const machineFeedBtn = document.getElementById('machineFeedBtn');
-const machineJob = document.getElementById('machineJob');
-const machineJobName = document.getElementById('machineJobName');
-const machineJobTime = document.getElementById('machineJobTime');
-const machineJobFill = document.getElementById('machineJobFill');
+const craftPanel = document.getElementById('craftPanel');
+const craftGrid = document.getElementById('craftGrid');
+const closeCraftBtn = document.getElementById('closeCraftBtn');
+const craftTierLabel = document.getElementById('craftTierLabel');
+const craftWoodStock = document.getElementById('craftWoodStock');
+const craftIronStock = document.getElementById('craftIronStock');
+const craftDetailIcon = document.getElementById('craftDetailIcon');
+const craftDetailName = document.getElementById('craftDetailName');
+const craftDetailDesc = document.getElementById('craftDetailDesc');
+const craftDetailCost = document.getElementById('craftDetailCost');
+const craftDetailBadge = document.getElementById('craftDetailBadge');
+const craftButton = document.getElementById('craftButton');
 const audioToggle = document.getElementById('audioToggle');
 const cameraBtn = document.getElementById('cameraBtn');
 const settingsBtn = document.getElementById('settingsBtn');
@@ -81,6 +91,8 @@ const world = new THREE.Group();
 scene.add(world);
 
 const MACHINE_POSITION = new THREE.Vector3(3.4, 0, -1);
+const BENCH_POSITION = new THREE.Vector3(4.2, 0, 4.2);
+const GRINDER_POSITION = new THREE.Vector3(6.5, 0, 2.6);
 const IRON_ROCK_HITS = 13;
 const solidProps = [];
 const TREE_HITS_BASE = 13;
@@ -1116,17 +1128,22 @@ function resetIronRocks() {
   }
 }
 
-const FIRE_FEED_RANGE = 3.8;
+const FIRE_FEED_RANGE = 3;
+const GRINDER_RANGE = 3;
+const BENCH_PROMPT_RANGE = 4;
+const BENCH_INTERACT_RANGE = 4;
 const TREE_INTERACT_RANGE = 2.5;
-const FUEL_DRAIN_PER_SECOND = 0.8;
-const LOG_FUEL_VALUE = 25;
+const FIRE_LEVEL_MAX = 5;
+const FIRE_LEVELUP_RESET = 50;
+const FIRE_GAIN_PER_LOG = { 1: 30, 2: 12, 3: 5, 4: 3, 5: 2 };
+const FIRE_DRAIN_PER_MINUTE = { 1: 10, 2: 4, 3: 2, 4: 1.2, 5: 0.8 };
+const FIRE_SAFE_RADII = { 1: 8, 2: 12, 3: 16, 4: 20, 5: 26 };
+const FIRE_FLAME_HEIGHTS = { 1: 1, 2: 1.5, 3: 2, 4: 2.5, 5: 3.5 };
 const TREE_SHAKE_TIME = 0.36;
 const TREE_FALL_TIME = 1.15;
 const SAPLING_GROW_TIME = 120;
 const SAPLING_STAGE_SCALES = [0.35, 0.58, 0.82, 1.06];
 const ATTACK_DURATION = 0.34;
-const FIRE_SCARE_RADIUS = 6;
-const FIRE_STRONG_FUEL = 50;
 const DAY_LENGTH = 180;
 const NIGHT_LENGTH = 120;
 const CYCLE_LENGTH = DAY_LENGTH + NIGHT_LENGTH;
@@ -1135,16 +1152,13 @@ const DAWN_LENGTH = 14;
 const MAX_ENEMIES = 30;
 const PICKUP_RANGE = 3.35;
 const CARRY_LIMIT = 1;
-const BACKPACK_CAPACITY = 20;
+const DEFAULT_BACKPACK_CAPACITY = 20;
+const GOOD_SACK_CAPACITY = 35;
 const HUNGER_DRAIN_PER_SECOND = 0.42;
 const BERRY_HUNGER = 18;
 const EQUIP_TIME = 0.3;
 const STACK_LIMIT = 20;
-const MACHINE_INTERACT_RANGE = 2.7;
-const MACHINE_CLOSE_ITEM_RANGE = 1.45;
-const MACHINE_FUEL_MAX = 100;
-const MACHINE_WOOD_FUEL = 25;
-const MACHINE_FUEL_DRAIN = 4;
+const MAX_BEAR_TRAPS = 8;
 const IRON_REGROW_MIN = 28;
 const IRON_REGROW_MAX = 44;
 const ITEM_NAMES = {
@@ -1152,54 +1166,42 @@ const ITEM_NAMES = {
   sapling: 'Sapling',
   berry: 'Berry',
   iron: 'Iron piece',
+  axe: 'Old Axe',
   pickaxe: 'Pickaxe',
-  ironAxe: 'Iron Axe',
+  torch: 'Torch',
+  ironAxe: 'Good Axe',
   ironSword: 'Iron Sword',
   ironWall: 'Iron Wall',
-  biggerCampfire: 'Bigger Campfire'
+  logWall: 'Log Wall',
+  bearTrap: 'Bear Trap'
 };
-const FUEL_VALUES = { wood: LOG_FUEL_VALUE, sapling: 12, berry: 5 };
-const FIRE_FUEL_TYPES = new Set(['wood', 'sapling', 'berry']);
-const UPGRADE_ORDER = ['ironAxe', 'pickaxe', 'ironSword', 'ironWall', 'biggerCampfire'];
-const UPGRADES = {
-  ironAxe: {
-    name: 'Iron Axe',
-    cost: { wood: 6, iron: 3 },
-    time: 10,
-    desc: 'Chops faster and hits harder.'
-  },
-  pickaxe: {
-    name: 'Pickaxe',
-    cost: { wood: 4, iron: 1 },
-    time: 10,
-    desc: 'Mine iron rocks at the forest edge.'
-  },
-  ironSword: {
-    name: 'Iron Sword',
-    cost: { wood: 5, iron: 5 },
-    time: 10,
-    desc: 'Strong melee blade for monsters.'
-  },
-  ironWall: {
-    name: 'Iron Wall',
-    cost: { wood: 8, iron: 6 },
-    time: 10,
-    desc: 'Places a sturdy wall by the campfire.'
-  },
-  biggerCampfire: {
-    name: 'Bigger Campfire',
-    cost: { wood: 10, iron: 5 },
-    time: 10,
-    desc: 'Wider light and scare radius.'
-  }
-};
+const FIRE_FUEL_TYPES = new Set(['wood']);
 const TOOL_STATS = {
   axe: { cooldown: 0.58, damage: 1, treePower: 1, rockPower: 0, range: 3.3, reach: 2.5 },
   pickaxe: { cooldown: 0.5, damage: 1, treePower: 0, rockPower: 1, range: 3, reach: 2.5 },
+  torch: { cooldown: 0.6, damage: 1, treePower: 0, rockPower: 0, range: 2.4, reach: 2.2 },
   ironAxe: { cooldown: 0.4, damage: 2, treePower: 2, rockPower: 0, range: 3.5, reach: 2.8 },
   ironSword: { cooldown: 0.42, damage: 3, treePower: 0, rockPower: 0, range: 3.6, reach: 2.8 }
 };
-const TOOL_ORDER = ['axe', 'backpack', 'pickaxe', 'ironAxe', 'ironSword'];
+const TOOL_ORDER = ['axe', 'backpack', 'pickaxe', 'torch', 'ironSword'];
+
+// Crafting recipes. `tier` is the bench level required (1 = no heading).
+const RECIPES = [
+  { id: 'pickaxe', tier: 1, name: 'Pickaxe', icon: '⛏', cost: { wood: 4, iron: 1 }, desc: 'Mine iron rocks at the forest edge.', kind: 'tool', repeatable: true },
+  { id: 'torch', tier: 1, name: 'Torch', icon: '🔥', cost: { wood: 2, iron: 1 }, desc: 'A warm light to carry into the dark.', kind: 'tool', repeatable: true },
+  { id: 'bench2', tier: 1, name: 'Crafting Bench 2', icon: '🛠', cost: { wood: 8, iron: 6 }, desc: 'Upgrade the bench to unlock tier 2 gear.', kind: 'bench', oneTime: true, benchTier: 2 },
+  { id: 'ironAxe', tier: 2, name: 'Good Axe', icon: '🪓', cost: { wood: 6, iron: 3 }, desc: 'Chops faster and hits harder. Replaces the Old Axe.', kind: 'tool', oneTime: true },
+  { id: 'goodSack', tier: 2, name: 'Good Sack', icon: '🎒', cost: { wood: 6, iron: 5 }, desc: 'Backpack capacity grows from 20 to 35.', kind: 'sack', oneTime: true },
+  { id: 'logWall', tier: 2, name: 'Log Wall', icon: '🪵', cost: { wood: 12 }, desc: 'A sturdy wooden wall. Craft it, then place it.', kind: 'placeable', placeType: 'logWall', repeatable: true },
+  { id: 'bearTrap', tier: 2, name: 'Bear Trap', icon: '⚙', cost: { iron: 3 }, desc: 'Damages and stuns a monster that steps on it.', kind: 'placeable', placeType: 'bearTrap', repeatable: true, trap: true },
+  { id: 'bench3', tier: 2, name: 'Crafting Bench 3', icon: '🛠', cost: { wood: 15, iron: 10 }, desc: 'Upgrade the bench to unlock tier 3 gear.', kind: 'bench', oneTime: true, benchTier: 3 },
+  { id: 'ironSword', tier: 3, name: 'Iron Sword', icon: '🗡', cost: { wood: 5, iron: 5 }, desc: 'A strong melee blade for monsters.', kind: 'tool', repeatable: true },
+  { id: 'ironWall', tier: 3, name: 'Iron Wall', icon: '🛡', cost: { wood: 8, iron: 6 }, desc: 'A sturdy metal wall. Craft it, then place it.', kind: 'placeable', placeType: 'ironWall', repeatable: true },
+  { id: 'bench4', tier: 4, name: 'Crafting Bench 4', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' },
+  { id: 'mystery1', tier: 4, name: '???', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' },
+  { id: 'mystery2', tier: 4, name: '???', icon: '?', cost: {}, desc: 'Coming soon.', kind: 'locked' }
+];
+const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
 let interactPrompt = 'INTERACT';
 let toastTimer = 0;
 let touchDebugTimer = 0;
@@ -1213,28 +1215,30 @@ function getCampfireDistance() {
   );
 }
 
-function getMachineDistance() {
+function getBenchDistance() {
   return Math.hypot(
-    player.position.x - MACHINE_POSITION.x,
-    player.position.z - MACHINE_POSITION.z
+    player.position.x - BENCH_POSITION.x,
+    player.position.z - BENCH_POSITION.z
+  );
+}
+
+function getGrinderDistance() {
+  return Math.hypot(
+    player.position.x - GRINDER_POSITION.x,
+    player.position.z - GRINDER_POSITION.z
   );
 }
 
 function getFireScareRadius() {
-  return FIRE_SCARE_RADIUS + state.fireLevel * 2.4;
+  return state.fireOut ? 0 : (FIRE_SAFE_RADII[state.fireLevel] || 8);
 }
 
 function getCampfireSafeRadius() {
-  return 7 + state.fireLevel * 1.5;
-}
-
-function isUpgradeType(type) {
-  return type === 'pickaxe' || type === 'ironAxe' || type === 'ironSword'
-    || type === 'ironWall' || type === 'biggerCampfire';
+  return FIRE_SAFE_RADII[state.fireLevel] || 8;
 }
 
 function isToolType(tool) {
-  return tool === 'axe' || tool === 'pickaxe' || tool === 'ironAxe' || tool === 'ironSword';
+  return tool === 'axe' || tool === 'pickaxe' || tool === 'torch' || tool === 'ironAxe' || tool === 'ironSword';
 }
 
 function canChopTool(tool) {
@@ -1249,7 +1253,8 @@ function canMineTool(tool) {
 
 function updateInteractionTarget() {
   state.fireInReach = getCampfireDistance() <= FIRE_FEED_RANGE;
-  state.machineInReach = state.started && getMachineDistance() <= MACHINE_INTERACT_RANGE;
+  state.grinderInReach = state.started && getGrinderDistance() <= GRINDER_RANGE;
+  state.benchInReach = state.started && getBenchDistance() <= BENCH_PROMPT_RANGE;
   state.targetTree = null;
   state.targetRock = null;
   if (!state.started || state.gameOver) return;

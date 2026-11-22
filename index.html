@@ -30,17 +30,6 @@
         </div>
       </div>
 
-      <div class="panel center fire-panel">
-        <div class="fuel-header">
-          <span class="label">CAMPFIRE</span>
-          <span id="fuelText" class="fuel-value">100%</span>
-        </div>
-        <div class="fuel-track">
-          <div id="fuelFill" class="fuel-fill"></div>
-        </div>
-        <div id="statusText" class="status">Fire is strong</div>
-      </div>
-
       <div class="panel vitals-panel">
         <div class="vital-head">
           <span class="label">HEALTH</span>
@@ -53,6 +42,17 @@
         </div>
         <div class="hunger-track"><div id="hungerFill" class="hunger-fill"></div></div>
       </div>
+    </div>
+
+    <div id="fireCounter" class="fire-counter hidden" aria-live="polite">
+      <span id="fireCounterText">level 1 progress: 50/100</span>
+      <div class="fire-counter-track"><div id="fireCounterFill" class="fire-counter-fill"></div></div>
+    </div>
+    <div id="startHint" class="start-hint">Chop trees, then place wood on the fire</div>
+    <div id="fireFlash" aria-hidden="true"></div>
+    <div id="benchPrompt" class="bench-prompt hidden" aria-hidden="true">
+      <span class="bench-hand">✋</span>
+      <span>Craft Item</span>
     </div>
 
     <div id="audioControls" aria-label="Game controls">
@@ -114,6 +114,10 @@
     </div>
 
     <div id="actionCluster" aria-label="Action buttons">
+      <button id="placeBtn" class="action-btn" aria-label="Place carried wall or trap" style="display: none">
+        <span>PLACE</span>
+        <small>P</small>
+      </button>
       <button id="plantBtn" class="action-btn" aria-label="Plant a sapling" style="display: none">
         <span>PLANT</span>
         <small>Q</small>
@@ -131,6 +135,7 @@
     <div id="hotbar" aria-label="Hotbar">
       <button id="axeSlot" class="hotbar-slot" data-tool="axe" aria-label="Axe" aria-pressed="false">
         <span class="hotbar-num">1</span>
+        <span class="hotbar-label" id="axeLabel">Old Axe</span>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <path d="M18.6 39.8 29.2 14.2" fill="none" stroke="#9a6338" stroke-width="4.4" stroke-linecap="round" />
           <path d="M27 13.2c4.6-3.9 10-4.5 13.6-2.2 1.4.9 2.6 2.2 3.5 3.8-5.1.3-9.7 2-12.9 5.4l-1.7 1.9-4-3.7 1.5-5.2Z" fill="#c7d1d8" stroke="#f1f6f8" stroke-width="1.2" stroke-linejoin="round" />
@@ -139,6 +144,7 @@
       </button>
       <button id="backpackSlot" class="hotbar-slot" data-tool="backpack" aria-label="Backpack" aria-pressed="false">
         <span class="hotbar-num">2</span>
+        <span class="hotbar-label" id="backpackLabel">Old Sack</span>
         <span id="backpackBadge" class="hotbar-badge">0/20</span>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <rect x="12" y="14" width="24" height="26" rx="7" fill="#8a5530" stroke="#d9a56b" stroke-width="1.4" />
@@ -151,23 +157,25 @@
       </button>
       <button id="pickaxeSlot" class="hotbar-slot hidden" data-tool="pickaxe" aria-label="Pickaxe" aria-pressed="false">
         <span class="hotbar-num">3</span>
+        <span class="hotbar-label" id="pickaxeLabel">Pickaxe</span>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <path d="M14 41 32 17" fill="none" stroke="#9a6338" stroke-width="4.4" stroke-linecap="round" />
           <path d="M19.5 10.5c8.3-5 17.4-4.2 23.7 2.2-8.9-.8-15.6 1.1-20.5 5.7l-3.6 3.4-4.1-3.3 4.5-8Z" fill="#b8c4ca" stroke="#eef4f6" stroke-width="1.2" stroke-linejoin="round" />
           <path d="M22 20.7c4.5-3.8 9.6-5.3 15.4-5.2" fill="none" stroke="#77858d" stroke-width="1.3" stroke-linecap="round" />
         </svg>
       </button>
-      <button id="ironAxeSlot" class="hotbar-slot hidden" data-tool="ironAxe" aria-label="Iron Axe" aria-pressed="false">
+      <button id="torchSlot" class="hotbar-slot hidden" data-tool="torch" aria-label="Torch" aria-pressed="false">
         <span class="hotbar-num">4</span>
+        <span class="hotbar-label" id="torchLabel">Torch</span>
         <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M18.6 39.8 29.2 14.2" fill="none" stroke="#8a5530" stroke-width="4.4" stroke-linecap="round" />
-          <path d="M26.4 11.8c5-4.2 11-4.6 14.4-1.5 2.1 1.9 3.2 4.2 3.7 6.7-5.7-.2-10.6 1.6-14 5.1l-1.7 1.8-5.7-4.3 3.3-7.8Z" fill="#9fadb8" stroke="#f2f7fa" stroke-width="1.2" stroke-linejoin="round" />
-          <path d="M28.5 20.2c2.8-3.3 6.6-5.3 11-6.2" fill="none" stroke="#68767f" stroke-width="1.4" stroke-linecap="round" />
-          <circle cx="31.5" cy="20" r="1.2" fill="#ffcf76" />
+          <path d="M22 42 26 20" fill="none" stroke="#9a6338" stroke-width="4.4" stroke-linecap="round" />
+          <path d="M22.8 20c-2.8-4.1-1.9-8.6 2.5-12.4 4.8 4.6 6.3 8.7 2.9 12.5-1.5 1.7-3.4 1.9-5.4-.1Z" fill="#ff9d32" stroke="#ffd987" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M24.4 18c-1.2-2.5-.3-5.2 1.8-7.1 2.6 2.7 3 5.1 1.6 7.2-.9 1.3-1.9 1.1-3.4-.1Z" fill="#fff0a8" />
         </svg>
       </button>
       <button id="ironSwordSlot" class="hotbar-slot hidden" data-tool="ironSword" aria-label="Iron Sword" aria-pressed="false">
         <span class="hotbar-num">5</span>
+        <span class="hotbar-label" id="ironSwordLabel">Iron Sword</span>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <path d="M24 5.5 29.4 12 26.6 31h-5.2L18.6 12Z" fill="#c9d8df" stroke="#f5fafc" stroke-width="1.2" stroke-linejoin="round" />
           <path d="M24 7v22" stroke="#8496a1" stroke-width="1" />
@@ -190,34 +198,29 @@
       </div>
     </div>
 
-    <div id="upgradePanel" class="upgrade-panel hidden" role="dialog" aria-label="Upgrade machine">
-      <div class="upgrade-head">
-        <div class="upgrade-heading">
-          <span class="upgrade-title">UPGRADE MACHINE</span>
-          <span id="machineStatus" class="machine-status">Idle</span>
+    <div id="craftPanel" class="craft-panel hidden" role="dialog" aria-label="Crafting bench">
+      <div class="craft-head">
+        <div class="craft-heading">
+          <span class="craft-title">CRAFTING BENCH</span>
+          <span id="craftTierLabel" class="craft-tier-label">BENCH 1</span>
         </div>
-        <button id="closeUpgradeBtn" class="upgrade-close" aria-label="Close upgrade machine">×</button>
+        <button id="closeCraftBtn" class="craft-close" aria-label="Close crafting bench">×</button>
       </div>
-      <div class="machine-fuel">
-        <div class="machine-fuel-head">
-          <span class="label">FUEL</span>
-          <span id="machineFuelText">0%</span>
-        </div>
-        <div class="machine-fuel-track">
-          <div id="machineFuelFill" class="machine-fuel-fill"></div>
-        </div>
-        <button id="machineFeedBtn" class="machine-feed">ADD WOOD <b>+25</b></button>
+      <div class="craft-stock-row">
+        <span class="craft-stock"><span class="craft-stock-icon wood">▤</span><span class="craft-stock-name">WOOD</span><b id="craftWoodStock">0</b></span>
+        <span class="craft-stock"><span class="craft-stock-icon iron">⚡</span><span class="craft-stock-name">IRON</span><b id="craftIronStock">0</b></span>
       </div>
-      <div id="machineJob" class="machine-job hidden">
-        <div class="machine-job-head">
-          <span id="machineJobName">Working</span>
-          <span id="machineJobTime">10.0s</span>
-        </div>
-        <div class="machine-job-track">
-          <div id="machineJobFill" class="machine-job-fill"></div>
+      <div class="craft-body">
+        <div id="craftGrid" class="craft-grid"></div>
+        <div class="craft-detail">
+          <div id="craftDetailIcon" class="craft-detail-icon">⛏</div>
+          <div id="craftDetailName" class="craft-detail-name">Pickaxe</div>
+          <div id="craftDetailDesc" class="craft-detail-desc">Mine iron rocks at the forest edge.</div>
+          <div id="craftDetailCost" class="craft-cost-row"></div>
+          <div id="craftDetailBadge" class="craft-detail-badge"></div>
+          <button id="craftButton" class="craft-button" type="button">CRAFT</button>
         </div>
       </div>
-      <div id="upgradeGrid" class="upgrade-grid"></div>
     </div>
 
     <div id="desktopHelp" aria-hidden="true">WASD / ARROWS · DRAG LOOK · TAP EMPTY SPACE TO ATTACK · F DROP · 1–5 TOOLS</div>
@@ -226,7 +229,7 @@
     <div id="startOverlay" class="overlay visible">
       <div class="title">99 Nights</div>
       <div class="subtitle">Chop wood. Feed the campfire. Survive 99 nights.</div>
-      <div class="hint">Gather wood by day. At night, shadow creatures hunt you. Keep the fire strong to hold them back.<br />Equip the axe to chop, the backpack to carry items, and use the machine by the fire to craft iron gear. Loose iron scraps lie near the machine.</div>
+      <div class="hint">Gather wood by day. At night, shadow creatures hunt you. Keep the fire strong to hold them back.<br />Equip the axe to chop, the backpack to carry items, and use the crafting bench by the fire. Loose iron scraps lie near the camp.</div>
       <button id="startBtn">Begin</button>
     </div>
 

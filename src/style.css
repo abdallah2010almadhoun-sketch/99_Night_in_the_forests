@@ -1804,3 +1804,550 @@ button {
 }
 
 /* First-person viewmodel arm + tool are rendered by the camera itself. */
+
+/* ---------- Leveling campfire HUD ---------- */
+
+.fire-counter {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 25;
+  width: 188px;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, -100%);
+  transition: opacity 0.2s ease;
+}
+
+.fire-counter.visible {
+  opacity: 1;
+}
+
+#fireCounterText {
+  display: block;
+  margin-bottom: 4px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000;
+}
+
+.fire-counter-track {
+  height: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 4px;
+  background: #050808;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+}
+
+.fire-counter-fill {
+  width: 50%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #3fbf73, #78e39a);
+  box-shadow: 0 0 10px rgba(95, 232, 139, 0.5);
+  transition: width 0.2s linear, background 0.3s ease;
+}
+
+#startHint {
+  position: fixed;
+  left: 50%;
+  top: max(70px, calc(env(safe-area-inset-top) + 62px));
+  z-index: 31;
+  max-width: calc(100vw - 28px);
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 201, 112, 0.4);
+  border-radius: 999px;
+  background: rgba(5, 13, 17, 0.86);
+  color: #ffe0a6;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#startHint.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#fireFlash {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  background: radial-gradient(circle at 50% 58%, rgba(255, 236, 190, 0.9), rgba(255, 149, 54, 0.4) 38%, transparent 72%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#fireFlash.flash {
+  animation: fireLevelFlash 0.7s ease-out;
+}
+
+@keyframes fireLevelFlash {
+  0% { opacity: 0; }
+  18% { opacity: 0.82; }
+  100% { opacity: 0; }
+}
+
+/* ---------- Bench prompt ---------- */
+
+.bench-prompt {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 209, 126, 0.55);
+  border-radius: 12px;
+  background: rgba(8, 16, 20, 0.88);
+  color: #ffe3ae;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.bench-prompt.hidden {
+  display: none;
+}
+
+.bench-hand {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* ---------- Place button ---------- */
+
+#placeBtn {
+  right: 4px;
+  bottom: 96px;
+  width: 64px;
+  height: 64px;
+  border-color: rgba(255, 196, 112, 0.55);
+  background: radial-gradient(circle at 34% 28%, rgba(164, 112, 51, 0.64), rgba(37, 24, 11, 0.75));
+  box-shadow: 0 0 18px rgba(255, 177, 73, 0.2), inset 0 1px rgba(255, 255, 255, 0.18);
+}
+
+/* ---------- Hotbar labels and extra slot ---------- */
+
+.hotbar-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1px;
+  height: 62px;
+  padding: 5px 4px 3px;
+}
+
+.hotbar-slot svg {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+.hotbar-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: rgba(238, 247, 249, 0.7);
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hotbar-slot.equipped .hotbar-label {
+  color: #fff4d8;
+}
+
+/* ---------- Crafting bench panel ---------- */
+
+.craft-panel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 36;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: min(920px, calc(100vw - 16px));
+  max-height: calc(100vh - 10px);
+  padding: 10px 12px 11px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 197, 105, 0.38);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(17, 26, 30, 0.98), rgba(5, 12, 15, 0.98));
+  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.68), 0 0 30px rgba(255, 158, 57, 0.08);
+  transform: translate(-50%, -50%);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0s;
+  pointer-events: auto;
+}
+
+.craft-panel.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -47%) scale(0.97);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
+  pointer-events: none;
+}
+
+.craft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.craft-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.craft-title {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+.craft-tier-label {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.craft-close {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 158, 158, 0.5);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #b73333, #7e1c1c);
+  color: #fff;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.36);
+  touch-action: none;
+}
+
+.craft-stock-row {
+  display: flex;
+  gap: 7px;
+}
+
+.craft-stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.craft-stock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.craft-stock-icon.wood { color: #e0a66a; background: rgba(146, 88, 39, 0.3); }
+.craft-stock-icon.iron { color: #d9e4e8; background: rgba(126, 145, 153, 0.3); }
+
+.craft-stock-name {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.craft-stock b {
+  min-width: 20px;
+  color: #ffe1a8;
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+}
+
+.craft-stock b.pop {
+  animation: stockPop 0.28s ease;
+}
+
+@keyframes stockPop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.42); color: #fff8d8; }
+  100% { transform: scale(1); }
+}
+
+.craft-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(228px, 0.7fr);
+  gap: 9px;
+  min-height: 0;
+  flex: 1;
+}
+
+.craft-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: min-content;
+  gap: 6px;
+  min-height: 0;
+  padding: 1px 3px 2px 1px;
+  overflow-y: auto;
+  align-content: start;
+  scrollbar-width: thin;
+}
+
+.craft-tier-label {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding: 2px 1px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  color: rgba(255, 214, 150, 0.75);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.craft-tier-label:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.craft-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 60px;
+  margin: 0;
+  padding: 4px 3px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(39, 55, 62, 0.72), rgba(9, 18, 22, 0.8));
+  color: #eff6f8;
+  text-align: center;
+  touch-action: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.1s ease, opacity 0.12s ease;
+}
+
+.craft-card:active {
+  transform: scale(0.97);
+}
+
+.craft-card.selected {
+  border: 2px solid #ffd25a;
+  box-shadow: 0 0 14px rgba(255, 200, 75, 0.38), inset 0 0 12px rgba(255, 198, 74, 0.08);
+}
+
+.craft-card.locked {
+  opacity: 0.42;
+  filter: grayscale(0.7);
+}
+
+.craft-card.soldout {
+  opacity: 0.5;
+}
+
+.craft-card-icon {
+  font-size: 19px;
+  line-height: 1.05;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+
+.craft-card-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.craft-card-cost {
+  color: #ffc879;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.craft-card-badge {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  min-width: 18px;
+  padding: 1px 3px;
+  border-radius: 999px;
+  background: rgba(255, 202, 118, 0.95);
+  color: #1a0f04;
+  font-size: 6px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.craft-card.soldout .craft-card-badge {
+  background: rgba(120, 130, 134, 0.95);
+  color: #eef4f5;
+}
+
+.craft-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  padding: 7px 9px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(31, 44, 50, 0.6), rgba(7, 14, 17, 0.72));
+  text-align: center;
+}
+
+.craft-detail-icon {
+  font-size: 34px;
+  line-height: 1.1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+
+.craft-detail-name {
+  color: #fff6de;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.craft-detail-desc {
+  margin-top: 2px;
+  color: rgba(174, 198, 205, 0.85);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.craft-cost-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.cost-chip {
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 209, 128, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 194, 88, 0.08);
+  color: #ffd89a;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.cost-chip.missing {
+  border-color: rgba(255, 105, 100, 0.5);
+  background: rgba(170, 40, 38, 0.24);
+  color: #ff8e88;
+}
+
+.craft-detail-badge {
+  min-height: 12px;
+  margin-top: 3px;
+  color: #ffd27d;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.craft-button {
+  width: 100%;
+  min-height: 48px;
+  margin: auto 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(154, 255, 179, 0.65);
+  border-radius: 11px;
+  background: linear-gradient(180deg, #3fbd69, #1d7b42);
+  color: #f4fff6;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.25);
+  touch-action: none;
+}
+
+.craft-button:active {
+  transform: scale(0.98);
+}
+
+.craft-button:disabled {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, #536066, #2e393d);
+  color: rgba(235, 244, 246, 0.55);
+  box-shadow: none;
+}
+
+@media (max-height: 470px) {
+  .craft-panel {
+    gap: 5px;
+    padding: 7px 9px 8px;
+    border-radius: 14px;
+  }
+
+  .craft-title { font-size: 10px; }
+  .craft-close { width: 34px; height: 34px; flex-basis: 34px; font-size: 19px; }
+  .craft-stock { min-height: 26px; padding: 2px 7px; }
+  .craft-stock b { font-size: 12px; }
+  .craft-card { min-height: 48px; padding: 2px; border-radius: 7px; }
+  .craft-card-icon { font-size: 15px; }
+  .craft-card-name { font-size: 7px; }
+  .craft-card-cost { font-size: 6px; }
+  .craft-detail { padding: 4px 6px 6px; }
+  .craft-detail-icon { font-size: 26px; }
+  .craft-detail-name { font-size: 11px; }
+  .craft-detail-desc { font-size: 8px; }
+  .craft-button { min-height: 40px; font-size: 12px; }
+  .craft-grid { gap: 4px; }
+}
+
+@media (max-width: 720px) and (orientation: landscape) {
+  .craft-panel { width: calc(100vw - 10px); }
+  .craft-body { grid-template-columns: minmax(0, 1.15fr) minmax(190px, 0.85fr); }
+  .craft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hotbar-slot { width: 42px; height: 52px; padding: 3px 2px 2px; border-radius: 11px; }
+  .hotbar-slot svg { width: 28px; height: 28px; flex-basis: 28px; }
+  .hotbar-label { font-size: 5px; }
+  #placeBtn { right: 3px; bottom: 84px; width: 56px; height: 56px; font-size: 9px; }
+  #startHint { top: max(58px, calc(env(safe-area-inset-top) + 52px)); font-size: 10px; padding: 5px 11px; }
+  #fireCounterText { font-size: 9px; }
+  .fire-counter { width: 160px; }
+}
