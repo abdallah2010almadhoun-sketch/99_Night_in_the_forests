@@ -15,7 +15,6 @@ const lookZone = document.getElementById('lookZone');
 const jumpBtn = document.getElementById('jumpBtn');
 const dropBtn = document.getElementById('dropBtn');
 const plantBtn = document.getElementById('plantBtn');
-const chopBtn = document.getElementById('chopBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
 const berryText = document.getElementById('berryText');
@@ -63,7 +62,6 @@ const settingsPanel = document.getElementById('settingsPanel');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const volumeSlider = document.getElementById('volumeSlider');
 const volumeValue = document.getElementById('volumeValue');
-const invertHorizontalLook = document.getElementById('invertHorizontalLook');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -101,8 +99,6 @@ const PITCH_LIMIT = THREE.MathUtils.degToRad(80);
 const CAMERA_LOOK_SENSITIVITY_X = 0.0037;
 const CAMERA_LOOK_SENSITIVITY_Y = 0.0022;
 const TAP_REACH = 4;
-const CAMERA_VIEW_STORAGE_KEY = 'nights.cameraView';
-const INVERT_LOOK_STORAGE_KEY = 'nights.invertHorizontalLook';
 const TAP_MAX_MOVE = 15;
 const TAP_MAX_TIME = 300;
 
@@ -2626,7 +2622,6 @@ const state = {
   pinchDistance: 0,
   cameraYaw: 0,
   cameraPitch: 0,
-  invertHorizontalLook: true,
   cameraDistance: THIRD_PERSON_DISTANCE,
   firstPerson: false,
   viewBlend: 0,
@@ -2670,18 +2665,47 @@ const state = {
   hitEffectTimer: 0,
 };
 
-// Restore the player's last camera choice. A fresh game starts in third-person.
+// Camera controls and the camera view are session-only. Remove any values saved
+// by older builds so they cannot flip the controls or startup view.
 try {
-  const savedView = window.localStorage.getItem(CAMERA_VIEW_STORAGE_KEY);
-  if (savedView === 'first') {
-    state.firstPerson = true;
-    state.viewBlend = 1;
-  }
-  // Invert horizontal look is on by default and only off when saved explicitly.
-  state.invertHorizontalLook = window.localStorage.getItem(INVERT_LOOK_STORAGE_KEY) !== 'false';
+  window.localStorage.removeItem('nights.invertHorizontalLook');
+  window.localStorage.removeItem('nights.cameraView');
 } catch (error) {
-  // Storage can be blocked; third-person and the default look remain.
+  // Storage can be blocked; the in-memory defaults still apply.
 }
+
+// Console-only startup check: a +50 px horizontal drag must turn the view right.
+function runLookSelfTest() {
+  const savedYaw = state.cameraYaw;
+  const savedPitch = state.cameraPitch;
+  const forwardX = Math.sin(savedYaw);
+  const forwardZ = Math.cos(savedYaw);
+  const rightX = -forwardZ;
+  const rightZ = forwardX;
+
+  applyLookDelta(50, 0);
+  const turned = (Math.sin(state.cameraYaw) - forwardX) * rightX
+    + (Math.cos(state.cameraYaw) - forwardZ) * rightZ;
+  const looksRight = turned > 0;
+
+  applyLookDelta(0, -50);
+  const looksUp = state.cameraPitch > savedPitch;
+
+  state.cameraYaw = savedYaw;
+  state.cameraPitch = savedPitch;
+
+  if (!looksRight) {
+    console.error('[camera self-test] FAILED: +50 px right drag turned the view left');
+  }
+  if (!looksUp) {
+    console.error('[camera self-test] FAILED: upward drag did not look up');
+  }
+  if (looksRight && looksUp) {
+    console.info('[camera self-test] passed: drag right looks right, drag up looks up');
+  }
+}
+
+runLookSelfTest();
 
 function setFirstPerson(first, announce = true) {
   state.firstPerson = !!first;
@@ -2692,11 +2716,6 @@ function setFirstPerson(first, announce = true) {
       'aria-label',
       state.firstPerson ? 'Switch to third-person view' : 'Switch to first-person view'
     );
-  }
-  try {
-    window.localStorage.setItem(CAMERA_VIEW_STORAGE_KEY, state.firstPerson ? 'first' : 'third');
-  } catch (error) {
-    // Ignore storage failures.
   }
   if (announce) showToast(state.firstPerson ? 'First-person view' : 'Third-person view');
 }
@@ -3057,6 +3076,19 @@ function releaseJoystick() {
 joystickZone.addEventListener('pointerup', releaseJoystick);
 joystickZone.addEventListener('pointercancel', releaseJoystick);
 
+// DO NOT CHANGE THE SIGN: dragging the finger right turns the view right; dragging left turns it left.
+function applyLookDelta(dx, dy) {
+  // Forward is (sin(yaw), 0, cos(yaw)); screen-right is (-cos(yaw), 0, sin(yaw)).
+  // Decreasing yaw therefore turns the view toward screen-right, and increasing
+  // pitch looks up. Both camera modes read the same yaw/pitch.
+  state.cameraYaw -= dx * CAMERA_LOOK_SENSITIVITY_X;
+  state.cameraPitch = clamp(
+    state.cameraPitch - dy * CAMERA_LOOK_SENSITIVITY_Y,
+    -PITCH_LIMIT,
+    PITCH_LIMIT
+  );
+}
+
 // Unified pointer handling: a short, still touch is a tap interaction; movement
 // past the slop becomes a camera drag. Input from either half can tap, but only
 // drags that start on the right half rotate the camera.
@@ -3115,14 +3147,8 @@ window.addEventListener('pointermove', (event) => {
   if (!track.dragging || !track.canLook || interactionBlocked()) return;
 
   // Drag right = look right, drag left = look left. Both first-person and
-  // third-person views share this yaw; the setting flips only the horizontal axis.
-  const horizontalSign = state.invertHorizontalLook ? 1 : -1;
-  state.cameraYaw += dx * CAMERA_LOOK_SENSITIVITY_X * horizontalSign;
-  state.cameraPitch = clamp(
-    state.cameraPitch - dy * CAMERA_LOOK_SENSITIVITY_Y,
-    -PITCH_LIMIT,
-    PITCH_LIMIT
-  );
+  // third-person views share this same yaw and pitch.
+  applyLookDelta(dx, dy);
 });
 
 function endPointer(event) {
@@ -3334,11 +3360,6 @@ plantBtn.addEventListener('pointerdown', (event) => {
   plantSapling();
 });
 
-chopBtn.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  swingAtNearestResource();
-});
-
 axeSlot.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   equipTool('axe');
@@ -3470,6 +3491,7 @@ function handleWorldTap(clientX, clientY) {
     return;
   }
   attack();
+  tapNearbyResource();
 }
 
 function applyTapInteraction(owner) {
@@ -3549,9 +3571,16 @@ function applyTapInteraction(owner) {
   }
 }
 
-// The Chop button swings at the nearest tree or rock the player is facing.
-function swingAtNearestResource() {
+// Tapping empty scenery with the right tool still swings at the nearest tree
+// or iron rock standing within reach in front of the player.
+const NEARBY_RESOURCE_RANGE = 3;
+
+function tapNearbyResource() {
   if (interactionBlocked()) return;
+  const canTree = canChopTool(state.equippedTool);
+  const canRock = canMineTool(state.equippedTool);
+  if (!canTree && !canRock) return;
+
   const fx = Math.sin(state.cameraYaw);
   const fz = Math.cos(state.cameraYaw);
   let best = null;
@@ -3559,35 +3588,28 @@ function swingAtNearestResource() {
     const dx = x - player.position.x;
     const dz = z - player.position.z;
     const distance = Math.hypot(dx, dz);
-    if (distance < 0.001 || distance > TAP_REACH) return;
-    if ((dx * fx + dz * fz) / distance < 0.15) return;
+    if (distance < 0.001 || distance > NEARBY_RESOURCE_RANGE) return;
+    if ((dx * fx + dz * fz) / distance < 0.2) return;
     if (!best || distance < best.distance) best = { kind, ref, distance };
   };
-  for (const tree of treeData) {
-    if (!tree.userData.choppable || tree.userData.falling || !tree.visible) continue;
-    consider('tree', tree.position.x, tree.position.z, tree);
-  }
-  for (const rock of ironRocks) {
-    if (rock.broken) continue;
-    consider('rock', rock.x, rock.z, rock);
-  }
-  if (!best) {
-    showToast('Nothing to chop');
-    return;
-  }
-  if (best.kind === 'tree') {
-    if (!canChopTool(state.equippedTool)) {
-      showToast('Use the Axe');
-      return;
+  if (canTree) {
+    for (const tree of treeData) {
+      if (!tree.userData.choppable || tree.userData.falling || !tree.visible) continue;
+      consider('tree', tree.position.x, tree.position.z, tree);
     }
+  }
+  if (canRock) {
+    for (const rock of ironRocks) {
+      if (rock.broken) continue;
+      consider('rock', rock.x, rock.z, rock);
+    }
+  }
+  if (!best) return;
+  if (best.kind === 'tree') {
     chopTree(best.ref, TOOL_STATS[state.equippedTool]?.treePower ?? 1);
-    return;
+  } else {
+    mineIronRock(best.ref);
   }
-  if (!canMineTool(state.equippedTool)) {
-    showToast('Use the Pickaxe');
-    return;
-  }
-  mineIronRock(best.ref);
 }
 
 function harvestBerryBush(bush) {
@@ -5030,16 +5052,6 @@ settingsBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   event.stopPropagation();
   setSettingsOpen(!state.settingsOpen);
-});
-
-invertHorizontalLook.checked = state.invertHorizontalLook;
-invertHorizontalLook.addEventListener('change', () => {
-  state.invertHorizontalLook = invertHorizontalLook.checked;
-  try {
-    window.localStorage.setItem(INVERT_LOOK_STORAGE_KEY, String(state.invertHorizontalLook));
-  } catch (error) {
-    // Ignore storage failures.
-  }
 });
 
 closeSettingsBtn.addEventListener('pointerdown', (event) => {

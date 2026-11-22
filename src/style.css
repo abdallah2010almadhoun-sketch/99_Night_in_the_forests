@@ -598,16 +598,6 @@ button {
   background: radial-gradient(circle at 34% 28%, rgba(66, 158, 98, 0.55), rgba(11, 38, 24, 0.7));
 }
 
-#chopBtn {
-  right: 4px;
-  bottom: 96px;
-  width: 64px;
-  height: 64px;
-  border-color: rgba(255, 198, 112, 0.5);
-  background: radial-gradient(circle at 34% 28%, rgba(160, 108, 48, 0.6), rgba(35, 22, 10, 0.72));
-  box-shadow: 0 0 20px rgba(226, 158, 74, 0.18), inset 0 1px rgba(255, 255, 255, 0.18);
-}
-
 /* ---------- Hotbar ---------- */
 
 #hotbar {
@@ -1113,14 +1103,6 @@ button {
     font-size: 9px;
   }
 
-  #chopBtn {
-    right: 3px;
-    bottom: 84px;
-    width: 56px;
-    height: 56px;
-    font-size: 9px;
-  }
-
   #hotbar {
     gap: 8px;
     padding: 5px;
@@ -1364,23 +1346,6 @@ button {
   color: var(--gold);
   font-size: 10px;
   letter-spacing: 0.04em;
-}
-
-.invert-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.invert-row input {
-  width: 18px;
-  height: 18px;
-  accent-color: #ffba58;
 }
 
 .volume-slider {
