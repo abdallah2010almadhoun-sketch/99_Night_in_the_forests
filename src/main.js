@@ -2162,9 +2162,9 @@ function updateCraftGrid() {
     const badge = card.querySelector('.craft-card-badge');
     let badgeText = '';
     if (soldOut) badgeText = 'SOLD OUT';
+    else if (locked) badgeText = '🔒';
     else if (recipe.trap) badgeText = `x${MAX_BEAR_TRAPS}`;
     else if (recipe.repeatable) badgeText = '∞';
-    else if (locked && recipe.tier === 4) badgeText = '🔒';
     badge.textContent = badgeText;
     badge.style.display = badgeText ? '' : 'none';
   }
@@ -2333,6 +2333,9 @@ function updatePlaceButton() {
     const label = placeBtn.querySelector('span');
     if (label) label.textContent = 'PLACE';
   }
+  for (const [kind, model] of Object.entries(carriedPlaceableModels)) {
+    model.visible = state.carriedPlaceable === kind;
+  }
 }
 
 function spawnWall(kind, x, z, rotation) {
@@ -2415,6 +2418,49 @@ function spawnBearTrap(x, z, rotation) {
 function resetBearTraps() {
   for (const trap of placedTraps) world.remove(trap.group);
   placedTraps.length = 0;
+}
+
+// Walls and traps are carried visibly in the left hand until the Place button is used.
+const carriedPlaceableModels = {};
+{
+  const heldWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x7a4c25, roughness: 0.9 });
+  const heldWoodDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x4f2f16, roughness: 0.95 });
+  const heldIronMaterial = new THREE.MeshStandardMaterial({ color: 0x66747c, roughness: 0.42, metalness: 0.62 });
+
+  const heldLogWall = new THREE.Group();
+  for (let i = 0; i < 3; i += 1) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.18, 1.8, 6), heldWoodMaterial);
+    log.rotation.z = Math.PI / 2;
+    log.position.y = (i - 1) * 0.36;
+    heldLogWall.add(log);
+  }
+  carriedPlaceableModels.logWall = heldLogWall;
+
+  const heldIronWall = new THREE.Group();
+  for (let i = 0; i < 3; i += 1) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.02, 0.16), heldIronMaterial);
+    panel.position.x = (i - 1) * 0.54;
+    heldIronWall.add(panel);
+  }
+  carriedPlaceableModels.ironWall = heldIronWall;
+
+  const heldBearTrap = new THREE.Group();
+  const heldTrapRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 14), trapMaterial);
+  heldTrapRing.rotation.x = Math.PI / 2;
+  heldBearTrap.add(heldTrapRing);
+  const heldTrapBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.08, 10), trapDarkMaterial);
+  heldTrapBase.position.y = -0.05;
+  heldBearTrap.add(heldTrapBase);
+  carriedPlaceableModels.bearTrap = heldBearTrap;
+
+  for (const [kind, model] of Object.entries(carriedPlaceableModels)) {
+    model.position.set(0.04, -1.02, 0.16);
+    model.rotation.set(0.28, 0.35, 0.18);
+    model.scale.setScalar(0.34);
+    model.visible = false;
+    model.userData.carriedPlaceable = kind;
+    leftArm.add(model);
+  }
 }
 
 function updateBearTraps(delta) {
@@ -3348,13 +3394,13 @@ function updateActionButtons() {
 function updateFireHud() {
   const level = state.fireLevel;
   const progress = clamp(state.fireProgress, 0, 100);
-  if (level >= FIRE_LEVEL_MAX) {
+  const full = progress >= 99.95;
+  if (level >= FIRE_LEVEL_MAX && full) {
     fireCounterText.textContent = `level ${level} progress: MAX`;
-    fireCounterFill.style.width = '100%';
   } else {
     fireCounterText.textContent = `level ${level} progress: ${Math.round(progress)}/100`;
-    fireCounterFill.style.width = `${progress}%`;
   }
+  fireCounterFill.style.width = `${progress}%`;
   let color = '#3fbf73';
   let glow = 'rgba(95, 232, 139, 0.55)';
   if (progress < 20) {
