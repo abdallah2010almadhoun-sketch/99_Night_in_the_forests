@@ -1343,6 +1343,8 @@ const BENCH_INTERACT_RANGE = 4;
 const TREE_INTERACT_RANGE = 2.5;
 const FIRE_LEVEL_MAX = 5;
 const FIRE_LEVELUP_RESET = 50;
+const ARENA_RADIUS_START = 50;
+const ARENA_RADIUS_BY_LEVEL = { 1: 50, 2: 250, 3: 450, 4: 650, 5: 850 };
 const FIRE_GAIN_PER_LOG = { 1: 30, 2: 12, 3: 5, 4: 3, 5: 2 };
 const FIRE_DRAIN_PER_MINUTE = { 1: 10, 2: 4, 3: 2, 4: 1.2, 5: 0.8 };
 const FIRE_SAFE_RADII = { 1: 8, 2: 12, 3: 16, 4: 20, 5: 26 };
@@ -2035,29 +2037,31 @@ function addFireProgress(amount) {
     return;
   }
   state.fireFlare = Math.max(state.fireFlare, 0.55);
+  const overflow = state.fireProgress + amount - 100;
   state.fireProgress = clamp(state.fireProgress + amount, 0, 100);
-  if (state.fireProgress >= 100) {
-    levelUpCampfire();
+  if (overflow >= 0) {
+    levelUpCampfire(Math.max(0, overflow));
   } else {
     updateHud();
   }
 }
 
-function levelUpCampfire() {
+function levelUpCampfire(overflow = 0) {
   if (state.fireLevel >= FIRE_LEVEL_MAX) {
     state.fireProgress = 100;
     updateHud();
     return;
   }
   state.fireLevel += 1;
-  state.fireProgress = state.fireLevel >= FIRE_LEVEL_MAX ? 100 : FIRE_LEVELUP_RESET;
+  state.fireProgress = state.fireLevel >= FIRE_LEVEL_MAX ? 100 : clamp(overflow, 0, 100);
   state.fireOut = false;
   state.fireDarken = 0;
   state.fireFlare = 1;
   buildCampfireLevel(state.fireLevel);
   triggerFireFlash();
   playFireLevelChime();
-  showToast('Campfire level up!');
+  showToast(`FIRE LEVEL ${state.fireLevel}. MAP EXPANDED`);
+  if (typeof beginWallExpansion === 'function') beginWallExpansion(state.fireLevel);
   updateHud();
 }
 
@@ -3148,6 +3152,49 @@ const campfireEmberMaterial = new THREE.MeshStandardMaterial({
 });
 
 let safeRing = null;
+const arenaWall = new THREE.Mesh(
+  new THREE.CylinderGeometry(ARENA_RADIUS_START, ARENA_RADIUS_START, 60, 96, 1, true),
+  new THREE.MeshStandardMaterial({ color: 0xcfd3d4, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide })
+);
+arenaWall.position.y = 30;
+arenaWall.receiveShadow = true;
+arenaWall.castShadow = false;
+world.add(arenaWall);
+
+let arenaWallRadius = ARENA_RADIUS_START;
+let wallExpansion = null;
+
+function beginWallExpansion(level) {
+  const target = ARENA_RADIUS_BY_LEVEL[level] || ARENA_RADIUS_START;
+  wallExpansion = {
+    from: arenaWallRadius,
+    to: target,
+    elapsed: 0,
+    duration: 8
+  };
+}
+
+function updateArenaWall(delta) {
+  if (wallExpansion) {
+    wallExpansion.elapsed += delta;
+    const t = clamp(wallExpansion.elapsed / wallExpansion.duration, 0, 1);
+    const eased = t * t * (3 - 2 * t);
+    arenaWallRadius = THREE.MathUtils.lerp(wallExpansion.from, wallExpansion.to, eased);
+    arenaWall.scale.set(arenaWallRadius / ARENA_RADIUS_START, 1, arenaWallRadius / ARENA_RADIUS_START);
+    if (t >= 1) wallExpansion = null;
+  }
+}
+
+function clampToArena(position) {
+  const radius = Math.hypot(position.x, position.z);
+  const limit = arenaWallRadius - 1;
+  if (radius > limit) {
+    const scale = limit / radius;
+    position.x *= scale;
+    position.z *= scale;
+  }
+}
+
 const fireUp = new THREE.Vector3(0, 1, 0);
 
 function addFireLog(group, base, apex, radius, material) {
@@ -3352,7 +3399,7 @@ const state = {
   grinderInReach: false,
   benchInReach: false,
   fireLevel: 1,
-  fireProgress: 50,
+  fireProgress: 0,
   fireGrow: 0,
   fireDarken: 0,
   startHintTimer: 0,
@@ -3362,7 +3409,7 @@ const state = {
   starveTimer: 0,
   portrait: false,
   paused: false,
-  fireOut: false,
+  fireOut: true,
   fireFlare: 0,
   fireInReach: false,
   chopTimer: 0,
@@ -3995,15 +4042,18 @@ function startGame() {
   state.settingsOpen = false;
   state.benchInReach = false;
   state.fireLevel = 1;
-  state.fireProgress = 50;
+  state.fireProgress = 0;
   state.fireGrow = 0;
   state.fireDarken = 0;
   state.startHintTimer = 8;
+  state.fireOut = true;
+  arenaWallRadius = ARENA_RADIUS_START;
+  arenaWall.scale.set(1, 1, 1);
+  wallExpansion = null;
   state.carriedPlaceable = null;
   state.targetRock = null;
   state.dropCooldown = 0;
   state.starveTimer = 0;
-  state.fireOut = false;
   state.fireFlare = 0;
   state.chopTimer = 0;
   state.plantCooldown = 0;
@@ -4446,11 +4496,7 @@ function harvestBerryBush(bush) {
 }
 
 function tapCampfire() {
-  if (state.fireOut) {
-    showToast('The fire is out — drag a log and press Put in fire');
-    return;
-  }
-  showToast('Drag a log and press Put in fire to feed the fire');
+  showToast('');
 }
 
 function setJumpHeld(held) {
@@ -4619,7 +4665,14 @@ function respawnAtCamp() {
 
 function spawnNightWave() {
   state.nightActive = true;
-  const count = Math.min(state.night + 1, MAX_ENEMIES);
+  if (state.night <= 1) {
+    for (const enemy of enemies) {
+      enemy.visible = false;
+      enemy.position.set(0, -40, 0);
+    }
+    return;
+  }
+  const count = Math.min(state.night + 1 + (state.fireLevel - 1) * 2, MAX_ENEMIES);
 
   for (let i = 0; i < enemies.length; i += 1) {
     const enemy = enemies[i];
@@ -6032,6 +6085,8 @@ function animate() {
       } else {
         movePlayer(delta);
       }
+      updateArenaWall(delta);
+      clampToArena(player.position);
       updatePlayerVertical(delta);
       updateEnemies(delta);
       updateVitals(delta);
