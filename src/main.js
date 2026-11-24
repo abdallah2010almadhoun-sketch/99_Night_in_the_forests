@@ -23,9 +23,7 @@ const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
 const berryText = document.getElementById('berryText');
 const ironText = document.getElementById('ironText');
-const fireCounter = document.getElementById('fireCounter');
-const fireCounterText = document.getElementById('fireCounterText');
-const fireCounterFill = document.getElementById('fireCounterFill');
+const mapExpandedNotice = document.getElementById('mapExpandedNotice');
 const startHint = document.getElementById('startHint');
 const dragLabel = document.getElementById('dragLabel');
 const dragName = document.getElementById('dragName');
@@ -92,15 +90,32 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x020a0f);
 scene.fog = new THREE.FogExp2(0x071922, 0.045);
 
-const camera = new THREE.PerspectiveCamera(67, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(67, window.innerWidth / window.innerHeight, 0.1, 1400);
 camera.rotation.order = 'YXZ';
 
 const clock = new THREE.Clock();
 const world = new THREE.Group();
 scene.add(world);
 
-const BENCH_POSITION = new THREE.Vector3(4.2, 0, 4.2);
-const GRINDER_POSITION = new THREE.Vector3(6.5, 0, 2.6);
+const BENCH_POSITION = new THREE.Vector3(9.6, 0, 10.2);
+const GRINDER_POSITION = new THREE.Vector3(13.8, 0, 5.0);
+const WELL_POSITION = new THREE.Vector3(-10.5, 0, 6.2);
+const POND_POSITION = new THREE.Vector3(8.0, 0, -11.0);
+const NOTICE_POSITION = new THREE.Vector3(-6.5, 0, -8.2);
+const CAMP_PROP_LAYOUT = [
+  { x: BENCH_POSITION.x, z: BENCH_POSITION.z, r: 3.4 },
+  { x: GRINDER_POSITION.x, z: GRINDER_POSITION.z, r: 2.8 },
+  { x: WELL_POSITION.x, z: WELL_POSITION.z, r: 3.6 },
+  { x: POND_POSITION.x, z: POND_POSITION.z, r: 5.2 },
+  { x: NOTICE_POSITION.x, z: NOTICE_POSITION.z, r: 2.8 }
+];
+
+function nearCampProp(x, z, padding = 0) {
+  for (const prop of CAMP_PROP_LAYOUT) {
+    if (Math.hypot(x - prop.x, z - prop.z) < prop.r + padding) return true;
+  }
+  return false;
+}
 const IRON_ROCK_HITS = 13;
 const solidProps = [];
 const TREE_HITS_BASE = 13;
@@ -142,14 +157,16 @@ const ARMED_WALK_FACTOR = 0.34;
 // broad, easy-to-climb slopes farther out in the forest.
 function getGroundHeight(x, z) {
   const radius = Math.hypot(x, z);
-  const inner = Math.min(Math.max((radius - 8) / 10, 0), 1);
-  const outer = Math.min(Math.max((62 - radius) / 8, 0), 1);
+  const flatCenter = Math.min(Math.max((radius - 7) / 11, 0), 1);
   const waves = Math.sin(x * 0.11 + 0.7) * Math.cos(z * 0.1 - 0.35) * 0.55
-    + Math.sin((x + z) * 0.055 - 0.6) * 0.35;
-  return waves * inner * outer;
+    + Math.sin((x + z) * 0.055 - 0.6) * 0.35
+    + Math.sin(x * 0.024 - z * 0.019) * 0.22;
+  return waves * flatCenter;
 }
 
-const groundGeometry = new THREE.PlaneGeometry(130, 130, 56, 56);
+// The whole 850 m map exists from the start; fog and the wall keep the far
+// forest hidden until the campfire pushes the boundary outward.
+const groundGeometry = new THREE.PlaneGeometry(1780, 1780, 150, 150);
 groundGeometry.rotateX(-Math.PI / 2);
 const groundPositions = groundGeometry.attributes.position;
 for (let i = 0; i < groundPositions.count; i += 1) {
@@ -256,12 +273,13 @@ function createTree(x, z, scale = 1) {
   return tree;
 }
 
-for (let i = 0; i < 90; i += 1) {
+for (let i = 0; i < 64; i += 1) {
   const angle = Math.random() * Math.PI * 2;
-  const radius = 12 + Math.random() * 42;
+  const radius = 13 + Math.random() * 28;
   const x = Math.cos(angle) * radius;
   const z = Math.sin(angle) * radius;
   if (Math.abs(x) < 6 && Math.abs(z) < 6) continue;
+  if (nearCampProp(x, z, 2.4)) continue;
   createTree(x, z, 0.8 + Math.random() * 1.2);
 }
 
@@ -311,13 +329,16 @@ function createSaplingMesh(scale = 1) {
 }
 
 const grassTufts = [];
-for (let i = 0; i < 120; i += 1) {
+for (let i = 0; i < 140; i += 1) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(0.12, 0.16, 0.12),
     new THREE.MeshStandardMaterial({ color: 0x173627, roughness: 1 })
   );
-  const x = (Math.random() - 0.5) * 90;
-  const z = (Math.random() - 0.5) * 90;
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 5 + Math.random() * 41;
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius;
+  if (nearCampProp(x, z, 1.2)) continue;
   mesh.position.set(x, getGroundHeight(x, z) + 0.08, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -772,6 +793,7 @@ for (let i = 0; i < 8; i += 1) {
   const radius = 10 + Math.random() * 20;
   const x = Math.cos(angle) * radius;
   const z = Math.sin(angle) * radius;
+  if (nearCampProp(x, z, 1.8)) continue;
   if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 1.6)) continue;
   const scale = 0.8 + Math.random() * 0.55;
   const groundY = getGroundHeight(x, z);
@@ -863,6 +885,7 @@ for (let i = 0; i < 15; i += 1) {
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
     if (Math.hypot(x, z) < 8) continue;
+    if (nearCampProp(x, z, 2.2)) continue;
     if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 2.1)) continue;
     if (berryBushes.some((bush) => Math.hypot(bush.x - x, bush.z - z) < 3.2)) continue;
     addBerryBush(x, z);
@@ -949,6 +972,7 @@ function createIronRock(x, z, scale = 1) {
 
 function findRockSpot(x, z, scale) {
   if (Math.hypot(x, z) < 10.5) return false;
+  if (nearCampProp(x, z, 2 * scale)) return false;
   if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 1.9 * scale)) return false;
   if (berryBushes.some((bush) => Math.hypot(bush.x - x, bush.z - z) < 2 * scale)) return false;
   if (ironRocks.some((rock) => Math.hypot(rock.x - x, rock.z - z) < 2.2 * scale)) return false;
@@ -1256,6 +1280,176 @@ grinder.userData.grinderRef = true;
 world.add(grinder);
 solidProps.push({ x: GRINDER_POSITION.x, z: GRINDER_POSITION.z, radius: 0.72, type: 'grinder' });
 
+// ---------- Arena landmarks ----------
+
+const wellStoneMaterial = new THREE.MeshStandardMaterial({ color: 0x626b6d, roughness: 0.96, flatShading: true });
+const wellWaterMaterial = new THREE.MeshStandardMaterial({
+  color: 0x153c46,
+  roughness: 0.22,
+  metalness: 0.18,
+  transparent: true,
+  opacity: 0.92
+});
+const wellWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x6a4828, roughness: 0.9 });
+const wellRoofMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3320, roughness: 0.92 });
+
+const well = new THREE.Group();
+{
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 1.35, 12, 1, true), wellStoneMaterial);
+  ring.position.y = 0.68;
+  ring.castShadow = true;
+  ring.receiveShadow = true;
+  well.add(ring);
+
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.19, 0.11, 5, 14), wellStoneMaterial);
+  lip.rotation.x = Math.PI / 2;
+  lip.position.y = 1.35;
+  lip.castShadow = true;
+  well.add(lip);
+
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.06, 18), wellWaterMaterial);
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0.72;
+  well.add(water);
+
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.13, 2.65, 0.13), wellWoodMaterial);
+    post.position.set(side * 0.95, 2.2, 0);
+    post.castShadow = true;
+    well.add(post);
+  }
+
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.13, 0.13), wellWoodMaterial);
+  beam.position.y = 3.2;
+  beam.castShadow = true;
+  well.add(beam);
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.72, 1.1, 4), wellRoofMaterial);
+  roof.position.y = 3.9;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  well.add(roof);
+
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.95, 5), wellWoodMaterial);
+  rope.position.set(0, 2.68, 0);
+  well.add(rope);
+
+  const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.24, 8, 1, true), wellWoodMaterial);
+  bucket.position.set(0, 2.12, 0);
+  bucket.castShadow = true;
+  well.add(bucket);
+}
+well.position.set(WELL_POSITION.x, getGroundHeight(WELL_POSITION.x, WELL_POSITION.z), WELL_POSITION.z);
+well.rotation.y = Math.atan2(-WELL_POSITION.x, -WELL_POSITION.z);
+world.add(well);
+solidProps.push({ x: WELL_POSITION.x, z: WELL_POSITION.z, radius: 1.38, type: 'well' });
+
+const pondWaterMaterial = new THREE.MeshStandardMaterial({
+  color: 0x173f49,
+  roughness: 0.18,
+  metalness: 0.25,
+  transparent: true,
+  opacity: 0.92
+});
+const pond = new THREE.Group();
+{
+  const water = new THREE.Mesh(new THREE.CircleGeometry(2.55, 24), pondWaterMaterial);
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0.055;
+  pond.add(water);
+
+  const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0x4b5654, roughness: 0.98, flatShading: true });
+  for (let i = 0; i < 14; i += 1) {
+    const angle = (i / 14) * Math.PI * 2;
+    const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.26 + Math.random() * 0.13, 0), edgeMaterial);
+    stone.position.set(Math.cos(angle) * 2.65, 0.12, Math.sin(angle) * 2.65);
+    stone.scale.y = 0.6;
+    stone.rotation.y = Math.random() * Math.PI;
+    stone.castShadow = true;
+    stone.receiveShadow = true;
+    pond.add(stone);
+  }
+}
+pond.position.set(POND_POSITION.x, getGroundHeight(POND_POSITION.x, POND_POSITION.z), POND_POSITION.z);
+world.add(pond);
+
+function createNoticeTexture() {
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 640;
+  canvasEl.height = 420;
+  const g = canvasEl.getContext('2d');
+
+  g.fillStyle = '#b48450';
+  g.fillRect(0, 0, 640, 420);
+  g.strokeStyle = '#6f4c2a';
+  g.lineWidth = 14;
+  g.strokeRect(7, 7, 626, 406);
+  g.strokeStyle = 'rgba(82, 52, 25, 0.35)';
+  g.lineWidth = 2;
+  for (let i = 0; i < 9; i += 1) {
+    g.beginPath();
+    g.moveTo(28 + i * 14, 20);
+    g.lineTo(-20 + i * 14, 400);
+    g.stroke();
+  }
+
+  g.fillStyle = '#2b1f16';
+  g.textAlign = 'center';
+  g.font = "700 44px 'Patrick Hand', 'Comic Sans MS', cursive";
+  g.fillText('MISSING KID', 320, 80);
+  g.fillText('LOCATIONS', 320, 126);
+
+  for (let i = 0; i < 3; i += 1) {
+    const x = 70 + i * 172;
+    g.fillStyle = 'rgba(238, 213, 167, 0.28)';
+    g.fillRect(x, 168, 156, 196);
+    g.strokeStyle = '#5a3c22';
+    g.lineWidth = 5;
+    g.strokeRect(x, 168, 156, 196);
+    g.fillStyle = 'rgba(62, 43, 27, 0.42)';
+    g.font = "400 24px 'Patrick Hand', 'Comic Sans MS', cursive";
+    g.fillText('empty', x + 78, 346);
+  }
+
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 2;
+  return texture;
+}
+
+const noticeBoard = new THREE.Group();
+{
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.2, 0.14), wellWoodMaterial);
+    post.position.set(side * 0.92, 1.1, -0.08);
+    post.castShadow = true;
+    noticeBoard.add(post);
+  }
+
+  const board = new THREE.Mesh(new THREE.BoxGeometry(2.25, 1.48, 0.12), wellWoodMaterial);
+  board.position.y = 1.72;
+  board.castShadow = true;
+  board.receiveShadow = true;
+  noticeBoard.add(board);
+
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.12, 1.39),
+    new THREE.MeshBasicMaterial({ map: createNoticeTexture() })
+  );
+  face.position.set(0, 1.72, 0.066);
+  noticeBoard.add(face);
+
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(2.48, 0.13, 0.35), wellRoofMaterial);
+  cap.position.y = 2.51;
+  cap.rotation.z = 0.035;
+  cap.castShadow = true;
+  noticeBoard.add(cap);
+}
+noticeBoard.position.set(NOTICE_POSITION.x, getGroundHeight(NOTICE_POSITION.x, NOTICE_POSITION.z), NOTICE_POSITION.z);
+noticeBoard.rotation.y = Math.atan2(-NOTICE_POSITION.x, -NOTICE_POSITION.z);
+world.add(noticeBoard);
+solidProps.push({ x: NOTICE_POSITION.x, z: NOTICE_POSITION.z, radius: 0.92, type: 'notice' });
+
 const benchState = {
   stock: { wood: 0, iron: 0 },
   tier: 1,
@@ -1348,7 +1542,7 @@ const ARENA_RADIUS_BY_LEVEL = { 1: 50, 2: 250, 3: 450, 4: 650, 5: 850 };
 const FIRE_GAIN_PER_LOG = { 1: 30, 2: 12, 3: 5, 4: 3, 5: 2 };
 const FIRE_DRAIN_PER_MINUTE = { 1: 10, 2: 4, 3: 2, 4: 1.2, 5: 0.8 };
 const FIRE_SAFE_RADII = { 1: 8, 2: 12, 3: 16, 4: 20, 5: 26 };
-const FIRE_FLAME_HEIGHTS = { 1: 1, 2: 1.5, 3: 2, 4: 2.5, 5: 3.5 };
+const FIRE_FLAME_HEIGHTS = { 1: 1, 2: 2, 3: 2.5, 4: 3, 5: 4 };
 const TREE_SHAKE_TIME = 0.36;
 const TREE_FALL_TIME = 1.15;
 const SAPLING_GROW_TIME = 120;
@@ -1505,6 +1699,17 @@ function showToast(message) {
   toastEl.textContent = message;
   toastEl.classList.add('visible');
   toastTimer = 1.5;
+}
+
+let mapNoticeTimeout = 0;
+function showMapExpansionNotice() {
+  mapExpandedNotice.classList.remove('visible');
+  void mapExpandedNotice.offsetWidth;
+  mapExpandedNotice.classList.add('visible');
+  clearTimeout(mapNoticeTimeout);
+  mapNoticeTimeout = setTimeout(() => {
+    mapExpandedNotice.classList.remove('visible');
+  }, 9300);
 }
 
 // ---------- Resource hit meter ----------
@@ -2024,13 +2229,16 @@ function eatDraggedItem() {
 
 function addFireProgress(amount) {
   if (!state.started || state.gameOver) return;
+  const wasOut = state.fireOut;
   if (state.fireOut) {
     state.fireOut = false;
     state.fireDarken = 0;
     state.fireFlare = 0.8;
     fireWarning.classList.remove('visible');
-    showToast('The fire roars back to life');
   }
+  state.fireEverLit = true;
+  triggerLogBurst();
+  if (wasOut) playFireIgnite();
   if (state.fireLevel >= FIRE_LEVEL_MAX) {
     state.fireProgress = 100;
     updateHud();
@@ -2039,6 +2247,7 @@ function addFireProgress(amount) {
   state.fireFlare = Math.max(state.fireFlare, 0.55);
   const overflow = state.fireProgress + amount - 100;
   state.fireProgress = clamp(state.fireProgress + amount, 0, 100);
+  if (state.fireProgress >= 70) ensureForestRingQueued(state.fireLevel + 1);
   if (overflow >= 0) {
     levelUpCampfire(Math.max(0, overflow));
   } else {
@@ -2053,15 +2262,22 @@ function levelUpCampfire(overflow = 0) {
     return;
   }
   state.fireLevel += 1;
-  state.fireProgress = state.fireLevel >= FIRE_LEVEL_MAX ? 100 : clamp(overflow, 0, 100);
+  // A log that lands exactly on 100 leaves no overflow. Keep a tiny spark so
+  // the celebration is not immediately replaced by "The fire is out!".
+  const carried = state.fireLevel >= FIRE_LEVEL_MAX ? 100 : Math.max(2, overflow);
+  state.fireProgress = clamp(carried, 0, 100);
   state.fireOut = false;
+  state.fireEverLit = true;
   state.fireDarken = 0;
   state.fireFlare = 1;
+  state.fireBarMessageTimer = 9;
   buildCampfireLevel(state.fireLevel);
   triggerFireFlash();
   playFireLevelChime();
-  showToast(`FIRE LEVEL ${state.fireLevel}. MAP EXPANDED`);
-  if (typeof beginWallExpansion === 'function') beginWallExpansion(state.fireLevel);
+  playRumble();
+  showMapExpansionNotice();
+  ensureForestRingQueued(state.fireLevel);
+  beginWallExpansion(state.fireLevel);
   updateHud();
 }
 
@@ -3057,7 +3273,7 @@ fireFlameInner.position.set(0, 0.92, 0);
 campfire.add(fireFlameInner);
 
 // A small pool of embers that drift up from the flame.
-const SPARK_COUNT = 30;
+const SPARK_COUNT = 54;
 const sparkPositions = new Float32Array(SPARK_COUNT * 3);
 const sparkVelocities = new Float32Array(SPARK_COUNT * 3);
 const sparkLife = new Float32Array(SPARK_COUNT);
@@ -3113,7 +3329,7 @@ function resetSpark(index) {
 for (let i = 0; i < SPARK_COUNT; i += 1) resetSpark(i);
 sparkAttribute.needsUpdate = true;
 
-function updateSparks(delta, ratio) {
+function updateSparks(delta, ratio, level = 1) {
   for (let i = 0; i < SPARK_COUNT; i += 1) {
     sparkLife[i] -= delta;
     if (sparkLife[i] <= 0) resetSpark(i);
@@ -3124,7 +3340,8 @@ function updateSparks(delta, ratio) {
     sparkVelocities[i3 + 1] -= delta * 0.55;
   }
   sparkAttribute.needsUpdate = true;
-  sparkGeometry.setDrawRange(0, Math.max(5, Math.floor(SPARK_COUNT * (0.4 + ratio * 0.6))));
+  const density = clamp(0.16 + ratio * 0.42 + level * 0.075, 0, 1);
+  sparkGeometry.setDrawRange(0, Math.max(6, Math.floor(SPARK_COUNT * density)));
 }
 
 const smokePuffs = [];
@@ -3138,9 +3355,222 @@ for (let i = 0; i < 4; i += 1) {
   smokePuffs.push(puff);
 }
 
+// ---------- World-space campfire bar ----------
+
+const fireBarCanvas = document.createElement('canvas');
+fireBarCanvas.width = 1024;
+fireBarCanvas.height = 256;
+const fireBarCtx = fireBarCanvas.getContext('2d');
+const fireBarTexture = new THREE.CanvasTexture(fireBarCanvas);
+fireBarTexture.colorSpace = THREE.SRGBColorSpace;
+fireBarTexture.anisotropy = 2;
+const fireBarMaterial = new THREE.SpriteMaterial({
+  map: fireBarTexture,
+  transparent: true,
+  depthWrite: false,
+  depthTest: true
+});
+const fireBar = new THREE.Sprite(fireBarMaterial);
+fireBar.scale.set(4.5, 1.12, 1);
+fireBar.visible = false;
+fireBar.renderOrder = 5;
+campfire.add(fireBar);
+
+let fireBarDirty = true;
+let fireBarLastProgress = -1;
+let fireBarLastLevel = -1;
+let fireBarLastMessage = false;
+
+function fireBarColorFor(progress) {
+  const stops = [
+    { v: 0, c: [222, 58, 48] },
+    { v: 34, c: [235, 78, 42] },
+    { v: 35, c: [244, 132, 42] },
+    { v: 59, c: [249, 184, 50] },
+    { v: 60, c: [205, 230, 62] },
+    { v: 99, c: [166, 236, 70] },
+    { v: 100, c: [76, 255, 126] }
+  ];
+  const p = clamp(progress, 0, 100);
+  for (let i = 1; i < stops.length; i += 1) {
+    if (p <= stops[i].v) {
+      const a = stops[i - 1];
+      const b = stops[i];
+      const t = (p - a.v) / Math.max(0.0001, b.v - a.v);
+      return `rgb(${Math.round(a.c[0] + (b.c[0] - a.c[0]) * t)}, ${Math.round(a.c[1] + (b.c[1] - a.c[1]) * t)}, ${Math.round(a.c[2] + (b.c[2] - a.c[2]) * t)})`;
+    }
+  }
+  return 'rgb(76, 255, 126)';
+}
+
+function fireBarRoundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawFireBar() {
+  const ctx = fireBarCtx;
+  const messageActive = state.fireBarMessageTimer > 0;
+  const level = state.fireLevel;
+  const progress = clamp(state.fireProgress, 0, 100);
+  const maxed = level >= FIRE_LEVEL_MAX && progress >= 99.95;
+  const barProgress = messageActive ? 100 : progress;
+  const message = messageActive
+    ? `FIRE LEVEL ${level}. MAP EXPANDED`
+    : (maxed ? `level ${level} progress: MAX` : `level ${level} progress: ${Math.round(progress)}/100`);
+
+  ctx.clearRect(0, 0, fireBarCanvas.width, fireBarCanvas.height);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${messageActive ? 52 : 55}px 'Patrick Hand', 'Comic Sans MS', cursive`;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#050505';
+  ctx.lineWidth = 10;
+  ctx.strokeText(message, 512, 108);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(message, 512, 108);
+
+  const x = 26;
+  const y = 164;
+  const width = 972;
+  const height = 58;
+  fireBarRoundRect(ctx, x, y, width, height, 12);
+  ctx.fillStyle = '#050807';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(242, 255, 242, 0.62)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  if (barProgress > 0) {
+    const innerX = x + 7;
+    const innerY = y + 7;
+    const innerW = width - 14;
+    const innerH = height - 14;
+    const fillW = innerW * (barProgress / 100);
+    const color = messageActive || barProgress >= 100
+      ? 'rgb(76, 255, 126)'
+      : fireBarColorFor(barProgress);
+    const gradient = ctx.createLinearGradient(innerX, 0, innerX + Math.max(1, fillW), 0);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, messageActive || barProgress >= 100 ? '#c4ffcf' : color);
+    ctx.save();
+    if (messageActive || barProgress >= 100) {
+      ctx.shadowColor = 'rgba(112, 255, 150, 0.9)';
+      ctx.shadowBlur = 16;
+    }
+    fireBarRoundRect(ctx, innerX, innerY, Math.max(4, fillW), innerH, 7);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  fireBarTexture.needsUpdate = true;
+  fireBarDirty = false;
+  fireBarLastProgress = Math.round(progress);
+  fireBarLastLevel = level;
+  fireBarLastMessage = messageActive;
+}
+
+function updateFireBar(delta) {
+  if (state.fireBarMessageTimer > 0) {
+    state.fireBarMessageTimer = Math.max(0, state.fireBarMessageTimer - delta);
+    if (state.fireBarMessageTimer <= 0) fireBarDirty = true;
+  }
+
+  const visible = state.started && !state.gameOver && !state.fireOut;
+  fireBar.visible = visible;
+  if (!visible) return;
+
+  const flameHeight = FIRE_FLAME_HEIGHTS[state.fireLevel] || 1;
+  fireBar.position.set(0, 2.55 + flameHeight, 0);
+
+  if (state.fireBarMessageTimer <= 0 && fireBarLastProgress !== Math.round(state.fireProgress)) {
+    fireBarDirty = true;
+  }
+  if (fireBarDirty
+    || fireBarLastLevel !== state.fireLevel
+    || fireBarLastMessage !== (state.fireBarMessageTimer > 0)) {
+    drawFireBar();
+  }
+}
+
+// A short yellow-green burst marks every log, with the first one igniting the fire.
+const LOG_BURST_COUNT = 46;
+const logBurstPositions = new Float32Array(LOG_BURST_COUNT * 3);
+const logBurstVelocities = new Float32Array(LOG_BURST_COUNT * 3);
+const logBurstLife = new Float32Array(LOG_BURST_COUNT);
+const logBurstGeometry = new THREE.BufferGeometry();
+const logBurstAttribute = new THREE.BufferAttribute(logBurstPositions, 3);
+logBurstGeometry.setAttribute('position', logBurstAttribute);
+const logBurstMaterial = new THREE.PointsMaterial({
+  color: 0xd8ff63,
+  size: 0.11,
+  map: createSparkTexture(),
+  transparent: true,
+  opacity: 0.95,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  sizeAttenuation: true
+});
+const logBurst = new THREE.Points(logBurstGeometry, logBurstMaterial);
+logBurst.visible = false;
+logBurst.frustumCulled = false;
+campfire.add(logBurst);
+
+function triggerLogBurst() {
+  for (let i = 0; i < LOG_BURST_COUNT; i += 1) {
+    const i3 = i * 3;
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * 0.55;
+    logBurstPositions[i3] = Math.cos(angle) * radius;
+    logBurstPositions[i3 + 1] = 0.55 + Math.random() * 0.45;
+    logBurstPositions[i3 + 2] = Math.sin(angle) * radius;
+    const speed = 1.1 + Math.random() * 2.2;
+    logBurstVelocities[i3] = Math.cos(angle) * speed * 0.7;
+    logBurstVelocities[i3 + 1] = 1.2 + Math.random() * 2.4;
+    logBurstVelocities[i3 + 2] = Math.sin(angle) * speed * 0.7;
+    logBurstLife[i] = 0.45 + Math.random() * 0.55;
+  }
+  logBurst.visible = true;
+  logBurstAttribute.needsUpdate = true;
+}
+
+function updateLogBurst(delta) {
+  if (!logBurst.visible) return;
+  let alive = 0;
+  for (let i = 0; i < LOG_BURST_COUNT; i += 1) {
+    if (logBurstLife[i] <= 0) continue;
+    logBurstLife[i] -= delta;
+    if (logBurstLife[i] <= 0) continue;
+    alive += 1;
+    const i3 = i * 3;
+    logBurstPositions[i3] += logBurstVelocities[i3] * delta;
+    logBurstPositions[i3 + 1] += logBurstVelocities[i3 + 1] * delta;
+    logBurstPositions[i3 + 2] += logBurstVelocities[i3 + 2] * delta;
+    logBurstVelocities[i3 + 1] -= delta * 2.8;
+  }
+  logBurstAttribute.needsUpdate = true;
+  logBurstMaterial.opacity = clamp(alive / LOG_BURST_COUNT, 0, 1) * 0.95;
+  if (alive === 0) {
+    logBurst.visible = false;
+  }
+}
+
 // ---------- Campfire levels ----------
 
 const campfireLogMaterial = new THREE.MeshStandardMaterial({ color: 0x6a3d1d, roughness: 0.92 });
+const campfireLogUnlitMaterial = new THREE.MeshStandardMaterial({ color: 0x2f2118, roughness: 1 });
 const campfireLogDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x46280f, roughness: 0.95 });
 const campfireStoneMaterial = new THREE.MeshStandardMaterial({ color: 0x6c7377, roughness: 0.95 });
 const campfireIronMaterial = new THREE.MeshStandardMaterial({ color: 0x3a4145, roughness: 0.5, metalness: 0.7 });
@@ -3152,17 +3582,132 @@ const campfireEmberMaterial = new THREE.MeshStandardMaterial({
 });
 
 let safeRing = null;
-const arenaWall = new THREE.Mesh(
-  new THREE.CylinderGeometry(ARENA_RADIUS_START, ARENA_RADIUS_START, 60, 96, 1, true),
-  new THREE.MeshStandardMaterial({ color: 0xcfd3d4, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide })
+const WALL_HEIGHT = 60;
+const WALL_THICKNESS = 10;
+
+function createArenaWallTexture() {
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 128;
+  canvasEl.height = 512;
+  const g = canvasEl.getContext('2d');
+
+  g.fillStyle = '#eceeec';
+  g.fillRect(0, 0, 128, 512);
+
+  // Broad weathered patches keep a pale wall from reading as flat sky.
+  for (let i = 0; i < 34; i += 1) {
+    const x = Math.random() * 128;
+    const y = Math.random() * 512;
+    const w = 18 + Math.random() * 52;
+    const h = 26 + Math.random() * 120;
+    g.fillStyle = `rgba(${120 + Math.random() * 40}, ${128 + Math.random() * 36}, ${126 + Math.random() * 34}, ${0.05 + Math.random() * 0.07})`;
+    g.beginPath();
+    g.ellipse(x, y, w, h, Math.random() * 0.5, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // One seam per texture tile; the tile repeats around the circumference so
+  // the wall reads as a built structure rather than fog.
+  g.fillStyle = 'rgba(96, 104, 102, 0.22)';
+  g.fillRect(0, 0, 4, 512);
+  g.fillStyle = 'rgba(255, 255, 255, 0.2)';
+  g.fillRect(4, 0, 2, 512);
+
+  // Faint horizontal courses.
+  for (let y = 96; y < 512; y += 96) {
+    g.fillStyle = 'rgba(108, 116, 114, 0.08)';
+    g.fillRect(0, y, 128, 2);
+  }
+
+  // A darker footing where the wall meets the grass.
+  const footing = g.createLinearGradient(0, 448, 0, 512);
+  footing.addColorStop(0, 'rgba(92, 100, 97, 0)');
+  footing.addColorStop(1, 'rgba(92, 100, 97, 0.34)');
+  g.fillStyle = footing;
+  g.fillRect(0, 448, 128, 64);
+
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 2;
+  return texture;
+}
+
+const arenaWallTexture = createArenaWallTexture();
+const arenaWallMaterial = new THREE.MeshStandardMaterial({
+  color: 0xc3c8c6,
+  map: arenaWallTexture,
+  roughness: 0.93,
+  metalness: 0.0,
+  side: THREE.DoubleSide
+});
+const arenaWallInnerMaterial = arenaWallMaterial.clone();
+arenaWallInnerMaterial.color.setHex(0xb4bbb8);
+const arenaWallBaseMaterial = new THREE.MeshStandardMaterial({
+  color: 0x8e9693,
+  roughness: 0.97,
+  metalness: 0.0,
+  side: THREE.DoubleSide
+});
+const arenaWall = new THREE.Group();
+const arenaWallInner = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 96, 1, true),
+  arenaWallInnerMaterial
 );
-arenaWall.position.y = 30;
-arenaWall.receiveShadow = true;
-arenaWall.castShadow = false;
+const arenaWallOuter = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 96, 1, true),
+  arenaWallMaterial
+);
+const arenaWallBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 96, 1, true),
+  arenaWallBaseMaterial
+);
+arenaWallInner.position.y = WALL_HEIGHT / 2;
+arenaWallOuter.position.y = WALL_HEIGHT / 2;
+arenaWallInner.receiveShadow = true;
+arenaWallOuter.receiveShadow = true;
+arenaWallBase.receiveShadow = true;
+arenaWall.add(arenaWallInner, arenaWallOuter, arenaWallBase);
 world.add(arenaWall);
 
 let arenaWallRadius = ARENA_RADIUS_START;
 let wallExpansion = null;
+let wallShake = 0;
+
+const WALL_DUST_COUNT = 160;
+const wallDustPositions = new Float32Array(WALL_DUST_COUNT * 3);
+const wallDustSeed = new Float32Array(WALL_DUST_COUNT * 3);
+const wallDustGeometry = new THREE.BufferGeometry();
+const wallDustAttribute = new THREE.BufferAttribute(wallDustPositions, 3);
+wallDustGeometry.setAttribute('position', wallDustAttribute);
+const wallDustMaterial = new THREE.PointsMaterial({
+  color: 0xd8d0be,
+  size: 0.58,
+  map: createSparkTexture(),
+  transparent: true,
+  opacity: 0.34,
+  depthWrite: false,
+  sizeAttenuation: true
+});
+const wallDust = new THREE.Points(wallDustGeometry, wallDustMaterial);
+wallDust.visible = false;
+wallDust.frustumCulled = false;
+scene.add(wallDust);
+const wallDustLife = new Float32Array(WALL_DUST_COUNT);
+
+function resetWallDustParticle(index) {
+  const i3 = index * 3;
+  const angle = Math.random() * Math.PI * 2;
+  const radius = arenaWallRadius + Math.random() * 1.2;
+  wallDustSeed[i3] = angle;
+  wallDustSeed[i3 + 1] = 0.15 + Math.random() * 4.6;
+  wallDustSeed[i3 + 2] = (Math.random() - 0.5) * 0.45;
+  wallDustPositions[i3] = Math.cos(angle) * radius;
+  wallDustPositions[i3 + 1] = wallDustSeed[i3 + 1];
+  wallDustPositions[i3 + 2] = Math.sin(angle) * radius;
+  wallDustLife[index] = 0.55 + Math.random() * 1.5;
+}
 
 function beginWallExpansion(level) {
   const target = ARENA_RADIUS_BY_LEVEL[level] || ARENA_RADIUS_START;
@@ -3172,6 +3717,19 @@ function beginWallExpansion(level) {
     elapsed: 0,
     duration: 8
   };
+  wallShake = 0.11;
+  wallDust.visible = true;
+  for (let i = 0; i < WALL_DUST_COUNT; i += 1) resetWallDustParticle(i);
+  wallDustAttribute.needsUpdate = true;
+  ensureForestRingQueued(level);
+}
+
+function updateWallVisual() {
+  arenaWallInner.scale.set(arenaWallRadius, WALL_HEIGHT, arenaWallRadius);
+  arenaWallOuter.scale.set(arenaWallRadius + WALL_THICKNESS, WALL_HEIGHT, arenaWallRadius + WALL_THICKNESS);
+  arenaWallBase.scale.set(arenaWallRadius - 0.04, 2.6, arenaWallRadius - 0.04);
+  arenaWallBase.position.y = 1.3;
+  arenaWallTexture.repeat.x = Math.max(24, Math.round(arenaWallRadius * 0.62));
 }
 
 function updateArenaWall(delta) {
@@ -3180,20 +3738,342 @@ function updateArenaWall(delta) {
     const t = clamp(wallExpansion.elapsed / wallExpansion.duration, 0, 1);
     const eased = t * t * (3 - 2 * t);
     arenaWallRadius = THREE.MathUtils.lerp(wallExpansion.from, wallExpansion.to, eased);
-    arenaWall.scale.set(arenaWallRadius / ARENA_RADIUS_START, 1, arenaWallRadius / ARENA_RADIUS_START);
+    updateWallVisual();
     if (t >= 1) wallExpansion = null;
+  }
+
+  wallShake = Math.max(0, wallShake - delta * 0.055);
+
+  if (wallDust.visible) {
+    let alive = 0;
+    for (let i = 0; i < WALL_DUST_COUNT; i += 1) {
+      wallDustLife[i] -= delta;
+      if (wallDustLife[i] <= 0) {
+        if (wallExpansion) resetWallDustParticle(i);
+        else continue;
+      }
+      alive += 1;
+      const i3 = i * 3;
+      const age = 1.5 - wallDustLife[i];
+      const angle = wallDustSeed[i3];
+      const radius = arenaWallRadius + 0.2 + age * 0.55;
+      wallDustPositions[i3] = Math.cos(angle) * radius + Math.cos(angle + 1.3) * age * 0.18;
+      wallDustPositions[i3 + 1] = wallDustSeed[i3 + 1] + age * 0.55;
+      wallDustPositions[i3 + 2] = Math.sin(angle) * radius + Math.sin(angle + 1.3) * age * 0.18;
+    }
+    wallDustAttribute.needsUpdate = true;
+    wallDustMaterial.opacity = wallExpansion ? 0.3 : Math.max(0, wallDustMaterial.opacity - delta * 0.22);
+    if (!wallExpansion && alive === 0) {
+      wallDust.visible = false;
+      wallDustMaterial.opacity = 0.34;
+    }
   }
 }
 
-function clampToArena(position) {
+function clampToArena(position, margin = 1) {
   const radius = Math.hypot(position.x, position.z);
-  const limit = arenaWallRadius - 1;
+  const limit = arenaWallRadius - margin;
   if (radius > limit) {
     const scale = limit / radius;
     position.x *= scale;
     position.z *= scale;
   }
 }
+
+// ---------- Chunked forest expansion ----------
+
+const generatedForestGroup = new THREE.Group();
+generatedForestGroup.name = 'generated-forest';
+world.add(generatedForestGroup);
+
+const forestQueue = [];
+const forestRingsQueued = new Set();
+const forestStats = { chunks: 0, trees: 0, rocks: 0, ironRocks: 0, bushes: 0, ponds: 0, children: 0 };
+const forestDummy = new THREE.Object3D();
+const forestColor = new THREE.Color();
+
+const forestTrunkGeometry = new THREE.BoxGeometry(1, 1, 1);
+const forestCanopyGeometry = new THREE.BoxGeometry(1, 1, 1);
+const forestRockGeometry = new THREE.DodecahedronGeometry(0.72, 0);
+const forestBushGeometry = new THREE.IcosahedronGeometry(0.62, 0);
+const forestTrunkMaterial = new THREE.MeshStandardMaterial({ color: 0x3a2820, roughness: 1 });
+const forestCanopyMaterial = new THREE.MeshStandardMaterial({ color: 0x1b3526, roughness: 1, flatShading: true });
+const forestRockMaterial = new THREE.MeshStandardMaterial({ color: 0x596260, roughness: 0.98, flatShading: true });
+const forestIronMaterial = new THREE.MeshStandardMaterial({ color: 0x4d5a60, roughness: 0.92, metalness: 0.08, flatShading: true });
+const forestOreMaterial = new THREE.MeshStandardMaterial({
+  color: 0xc47837,
+  emissive: 0x6b2408,
+  emissiveIntensity: 0.65,
+  roughness: 0.55,
+  metalness: 0.3
+});
+const forestBushMaterial = new THREE.MeshStandardMaterial({ color: 0x245038, roughness: 1, flatShading: true });
+const lostChildCoatMaterial = new THREE.MeshStandardMaterial({ color: 0xd9c47d, roughness: 0.95 });
+const lostChildScarfMaterial = new THREE.MeshStandardMaterial({ color: 0xa83b34, roughness: 0.9 });
+const lostChildSkinMaterial = new THREE.MeshStandardMaterial({ color: 0xf0c9a2, roughness: 0.8 });
+
+function ensureForestRingQueued(level) {
+  if (level < 2 || level > FIRE_LEVEL_MAX || forestRingsQueued.has(level)) return;
+  forestRingsQueued.add(level);
+
+  const inner = (ARENA_RADIUS_BY_LEVEL[level - 1] || ARENA_RADIUS_START) + 8;
+  const outer = (ARENA_RADIUS_BY_LEVEL[level] || ARENA_RADIUS_START) - 8;
+  if (outer <= inner) return;
+
+  const bands = level >= 4 ? 3 : 2;
+  const sectors = 10;
+  for (let band = 0; band < bands; band += 1) {
+    const rMin = inner + ((outer - inner) * band) / bands;
+    const rMax = inner + ((outer - inner) * (band + 1)) / bands;
+    for (let sector = 0; sector < sectors; sector += 1) {
+      const a0 = (sector / sectors) * Math.PI * 2;
+      const a1 = ((sector + 1) / sectors) * Math.PI * 2;
+      forestQueue.push({ level, rMin, rMax, a0, a1 });
+    }
+  }
+}
+
+function forestSpot(rMin, rMax, a0, a1) {
+  const angle = a0 + Math.random() * (a1 - a0);
+  const radius = Math.sqrt(rMin * rMin + Math.random() * (rMax * rMax - rMin * rMin));
+  return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, radius };
+}
+
+function addLostChild(parent, x, z) {
+  const child = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.54, 0.22), lostChildCoatMaterial);
+  body.position.y = 0.42;
+  body.castShadow = true;
+  child.add(body);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 7, 6), lostChildSkinMaterial);
+  head.position.y = 0.84;
+  head.castShadow = true;
+  child.add(head);
+
+  const scarf = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.25), lostChildScarfMaterial);
+  scarf.position.y = 0.7;
+  child.add(scarf);
+
+  child.position.set(x, getGroundHeight(x, z), z);
+  child.rotation.y = Math.random() * Math.PI * 2;
+  child.traverse((part) => { part.userData.tapIgnore = true; });
+  child.userData.lostChild = true;
+  parent.add(child);
+  forestStats.children += 1;
+}
+
+function addForestPond(parent, x, z, radius) {
+  const water = new THREE.Mesh(new THREE.CircleGeometry(radius, 20), pondWaterMaterial);
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(x, getGroundHeight(x, z) + 0.045, z);
+  parent.add(water);
+
+  const edge = new THREE.Mesh(
+    new THREE.TorusGeometry(radius + 0.12, 0.16, 4, 20),
+    forestRockMaterial
+  );
+  edge.rotation.x = Math.PI / 2;
+  edge.position.set(x, getGroundHeight(x, z) + 0.06, z);
+  edge.scale.z = 0.45;
+  parent.add(edge);
+  forestStats.ponds += 1;
+}
+
+function buildForestChunk(job) {
+  const chunk = new THREE.Group();
+  const angularWidth = job.a1 - job.a0;
+  const area = 0.5 * (job.rMax * job.rMax - job.rMin * job.rMin) * angularWidth;
+  const densityDivisor = 135 - (job.level - 2) * 20;
+  const treeCount = Math.min(260, Math.max(10, Math.floor(area / densityDivisor)));
+
+  const pondCount = job.level >= 2 && Math.random() < 0.5 ? 1 : 0;
+  const pondSpots = [];
+  for (let i = 0; i < pondCount; i += 1) {
+    const spot = forestSpot(job.rMin + 8, job.rMax - 8, job.a0, job.a1);
+    const radius = 1.8 + Math.random() * 2.2;
+    pondSpots.push({ x: spot.x, z: spot.z, radius });
+    addForestPond(chunk, spot.x, spot.z, radius);
+  }
+
+  const trunks = new THREE.InstancedMesh(forestTrunkGeometry, forestTrunkMaterial, treeCount);
+  const canopies = new THREE.InstancedMesh(forestCanopyGeometry, forestCanopyMaterial, treeCount);
+  const crowns = new THREE.InstancedMesh(forestCanopyGeometry, forestCanopyMaterial, treeCount);
+  trunks.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  canopies.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  crowns.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  trunks.frustumCulled = true;
+  canopies.frustumCulled = true;
+  crowns.frustumCulled = true;
+
+  let placedTrees = 0;
+  for (let i = 0; i < treeCount * 3 && placedTrees < treeCount; i += 1) {
+    const spot = forestSpot(job.rMin + 2, job.rMax - 2, job.a0, job.a1);
+    let blocked = false;
+    for (const pond of pondSpots) {
+      if (Math.hypot(spot.x - pond.x, spot.z - pond.z) < pond.radius + 1.4) {
+        blocked = true;
+        break;
+      }
+    }
+    if (blocked) continue;
+
+    const farFactor = clamp(spot.radius / 850, 0, 1);
+    const scale = (0.92 + Math.random() * 0.72) * (1 + farFactor * 0.55);
+    const trunkHeight = (2.1 + Math.random() * 1.1) * scale;
+    const trunkWidth = (0.24 + Math.random() * 0.1) * scale;
+    const y = getGroundHeight(spot.x, spot.z);
+    const yaw = Math.random() * Math.PI * 2;
+
+    forestDummy.position.set(spot.x, y + trunkHeight / 2, spot.z);
+    forestDummy.rotation.set(0, yaw, 0);
+    forestDummy.scale.set(trunkWidth, trunkHeight, trunkWidth);
+    forestDummy.updateMatrix();
+    trunks.setMatrixAt(placedTrees, forestDummy.matrix);
+    forestColor.setHSL(0.08 + Math.random() * 0.03, 0.3, 0.16 + Math.random() * 0.08);
+    trunks.setColorAt(placedTrees, forestColor);
+
+    const canopyWidth = (1.55 + Math.random() * 0.65) * scale;
+    const canopyHeight = (1.7 + Math.random() * 0.7) * scale;
+    forestDummy.position.set(spot.x, y + trunkHeight + canopyHeight * 0.34, spot.z);
+    forestDummy.rotation.set(0, yaw + Math.random() * 0.3, 0);
+    forestDummy.scale.set(canopyWidth, canopyHeight, canopyWidth);
+    forestDummy.updateMatrix();
+    canopies.setMatrixAt(placedTrees, forestDummy.matrix);
+    forestColor.setHSL(0.31 + Math.random() * 0.055, 0.38, 0.13 + Math.random() * 0.07);
+    canopies.setColorAt(placedTrees, forestColor);
+
+    const crownWidth = canopyWidth * (0.54 + Math.random() * 0.18);
+    const crownHeight = canopyHeight * (0.7 + Math.random() * 0.22);
+    forestDummy.position.set(spot.x, y + trunkHeight + canopyHeight * 0.94, spot.z);
+    forestDummy.rotation.set(0, yaw + Math.random() * 0.45, 0);
+    forestDummy.scale.set(crownWidth, crownHeight, crownWidth);
+    forestDummy.updateMatrix();
+    crowns.setMatrixAt(placedTrees, forestDummy.matrix);
+    forestColor.setHSL(0.32 + Math.random() * 0.05, 0.4, 0.16 + Math.random() * 0.08);
+    crowns.setColorAt(placedTrees, forestColor);
+    placedTrees += 1;
+  }
+
+  trunks.count = placedTrees;
+  canopies.count = placedTrees;
+  crowns.count = placedTrees;
+  trunks.instanceMatrix.needsUpdate = true;
+  canopies.instanceMatrix.needsUpdate = true;
+  crowns.instanceMatrix.needsUpdate = true;
+  if (trunks.instanceColor) trunks.instanceColor.needsUpdate = true;
+  if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
+  if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
+  chunk.add(trunks, canopies, crowns);
+  forestStats.trees += placedTrees;
+
+  const rockCount = Math.min(40, Math.max(1, Math.floor(area / 1100)));
+  const rocks = new THREE.InstancedMesh(forestRockGeometry, forestRockMaterial, rockCount);
+  let placedRocks = 0;
+  for (let i = 0; i < rockCount * 2 && placedRocks < rockCount; i += 1) {
+    const spot = forestSpot(job.rMin + 2, job.rMax - 2, job.a0, job.a1);
+    const scale = 0.65 + Math.random() * 1.05;
+    forestDummy.position.set(spot.x, getGroundHeight(spot.x, spot.z) + 0.28 * scale, spot.z);
+    forestDummy.rotation.set(Math.random() * 0.4, Math.random() * Math.PI, Math.random() * 0.4);
+    forestDummy.scale.set(scale, scale * 0.58, scale);
+    forestDummy.updateMatrix();
+    rocks.setMatrixAt(placedRocks, forestDummy.matrix);
+    placedRocks += 1;
+  }
+  rocks.count = placedRocks;
+  rocks.instanceMatrix.needsUpdate = true;
+  chunk.add(rocks);
+  forestStats.rocks += placedRocks;
+
+  const ironCount = Math.min(14, Math.max(0, Math.floor(area / 2600)));
+  if (ironCount > 0) {
+    const ironRocks = new THREE.InstancedMesh(forestRockGeometry, forestIronMaterial, ironCount);
+    const oreBits = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.12, 0), forestOreMaterial, ironCount * 3);
+    let placedIron = 0;
+    let placedOre = 0;
+    for (let i = 0; i < ironCount * 2 && placedIron < ironCount; i += 1) {
+      const spot = forestSpot(job.rMin + 3, job.rMax - 3, job.a0, job.a1);
+      const scale = 0.9 + Math.random() * 0.8;
+      const y = getGroundHeight(spot.x, spot.z);
+      forestDummy.position.set(spot.x, y + 0.42 * scale, spot.z);
+      forestDummy.rotation.set(0, Math.random() * Math.PI, 0);
+      forestDummy.scale.set(scale, scale * 0.72, scale);
+      forestDummy.updateMatrix();
+      ironRocks.setMatrixAt(placedIron, forestDummy.matrix);
+      for (let ore = 0; ore < 3; ore += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const oreScale = 0.8 + Math.random() * 0.6;
+        forestDummy.position.set(
+          spot.x + Math.cos(angle) * 0.5 * scale,
+          y + (0.48 + Math.random() * 0.25) * scale,
+          spot.z + Math.sin(angle) * 0.5 * scale
+        );
+        forestDummy.rotation.set(Math.random(), Math.random(), Math.random());
+        forestDummy.scale.setScalar(oreScale);
+        forestDummy.updateMatrix();
+        oreBits.setMatrixAt(placedOre, forestDummy.matrix);
+        placedOre += 1;
+      }
+      placedIron += 1;
+    }
+    ironRocks.count = placedIron;
+    oreBits.count = placedOre;
+    ironRocks.instanceMatrix.needsUpdate = true;
+    oreBits.instanceMatrix.needsUpdate = true;
+    chunk.add(ironRocks, oreBits);
+    forestStats.ironRocks += placedIron;
+  }
+
+  const bushCount = Math.min(48, Math.max(1, Math.floor(area / 1600)));
+  const bushes = new THREE.InstancedMesh(forestBushGeometry, forestBushMaterial, bushCount);
+  let placedBushes = 0;
+  for (let i = 0; i < bushCount * 2 && placedBushes < bushCount; i += 1) {
+    const spot = forestSpot(job.rMin + 2, job.rMax - 2, job.a0, job.a1);
+    const scale = 0.65 + Math.random() * 0.7;
+    forestDummy.position.set(spot.x, getGroundHeight(spot.x, spot.z) + 0.35 * scale, spot.z);
+    forestDummy.rotation.set(0, Math.random() * Math.PI, 0);
+    forestDummy.scale.set(scale, scale * 0.72, scale);
+    forestDummy.updateMatrix();
+    bushes.setMatrixAt(placedBushes, forestDummy.matrix);
+    placedBushes += 1;
+  }
+  bushes.count = placedBushes;
+  bushes.instanceMatrix.needsUpdate = true;
+  chunk.add(bushes);
+  forestStats.bushes += placedBushes;
+
+  const childChance = 0.22 + (job.level - 2) * 0.05;
+  if (Math.random() < childChance) {
+    const spot = forestSpot(job.rMin + 6, job.rMax - 6, job.a0, job.a1);
+    addLostChild(chunk, spot.x, spot.z);
+  }
+
+  generatedForestGroup.add(chunk);
+  forestStats.chunks += 1;
+}
+
+function processForestQueue() {
+  if (!forestQueue.length) return;
+  const start = performance.now();
+  while (forestQueue.length && performance.now() - start < 2.8) {
+    buildForestChunk(forestQueue.shift());
+  }
+}
+
+function resetForestExpansion() {
+  forestQueue.length = 0;
+  forestRingsQueued.clear();
+  generatedForestGroup.clear();
+  forestStats.chunks = 0;
+  forestStats.trees = 0;
+  forestStats.rocks = 0;
+  forestStats.ironRocks = 0;
+  forestStats.bushes = 0;
+  forestStats.ponds = 0;
+  forestStats.children = 0;
+}
+
+updateWallVisual();
 
 const fireUp = new THREE.Vector3(0, 1, 0);
 
@@ -3215,26 +4095,42 @@ function buildCampfireLevel(level) {
     if (child.geometry) child.geometry.dispose();
   }
 
-  const logCount = level === 1 ? 4 : 6;
-  const leanRadius = level === 1 ? 0.5 : 0.68;
-  const apexHeight = level === 1 ? 1.0 : 1.35;
-  for (let i = 0; i < logCount; i += 1) {
-    const angle = (i / logCount) * Math.PI * 2 + 0.35;
-    addFireLog(
-      campfireVisual,
-      new THREE.Vector3(Math.cos(angle) * leanRadius, 0.08, Math.sin(angle) * leanRadius),
-      new THREE.Vector3(Math.cos(angle) * 0.08, apexHeight, Math.sin(angle) * 0.08),
-      0.105,
-      i % 2 === 0 ? campfireLogMaterial : campfireLogDarkMaterial
-    );
+  // Level 1 is deliberately just three dark logs; it only becomes a teepee
+  // once the player feeds it the first log.
+  if (level === 1) {
+    for (let i = 0; i < 3; i += 1) {
+      const angle = (i / 3) * Math.PI * 2 + 0.45;
+      addFireLog(
+        campfireVisual,
+        new THREE.Vector3(Math.cos(angle) * 0.46, 0.08, Math.sin(angle) * 0.46),
+        new THREE.Vector3(Math.cos(angle) * 0.07, 0.92, Math.sin(angle) * 0.07),
+        0.115,
+        campfireLogUnlitMaterial
+      );
+    }
+  } else {
+    const logCount = level === 2 ? 6 : level === 3 ? 7 : level === 4 ? 9 : 12;
+    const leanRadius = level === 2 ? 0.72 : level === 3 ? 0.86 : level === 4 ? 1.0 : 1.2;
+    const apexHeight = level === 2 ? 1.45 : level === 3 ? 1.7 : level === 4 ? 2.0 : 2.35;
+    const thickness = level === 2 ? 0.14 : 0.115 + level * 0.009;
+    for (let i = 0; i < logCount; i += 1) {
+      const angle = (i / logCount) * Math.PI * 2 + 0.35;
+      addFireLog(
+        campfireVisual,
+        new THREE.Vector3(Math.cos(angle) * leanRadius, 0.1, Math.sin(angle) * leanRadius),
+        new THREE.Vector3(Math.cos(angle) * 0.08, apexHeight, Math.sin(angle) * 0.08),
+        thickness,
+        i % 2 === 0 ? campfireLogMaterial : campfireLogDarkMaterial
+      );
+    }
   }
 
   if (level >= 2) {
     for (const side of [-1, 1]) {
-      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 1.5, 7), campfireLogMaterial);
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 1.65, 7), campfireLogMaterial);
       seat.rotation.z = Math.PI / 2;
       seat.rotation.y = side * 0.28;
-      seat.position.set(side * 1.45, 0.22, side * 0.35);
+      seat.position.set(side * 1.5, 0.22, side * 0.35);
       seat.castShadow = true;
       seat.receiveShadow = true;
       campfireVisual.add(seat);
@@ -3243,7 +4139,7 @@ function buildCampfireLevel(level) {
 
   if (level >= 3) {
     const ringRadius = level >= 4 ? 1.95 : 1.45;
-    const stoneCount = level >= 4 ? 12 : 8;
+    const stoneCount = level >= 4 ? 12 : 9;
     for (let i = 0; i < stoneCount; i += 1) {
       const angle = (i / stoneCount) * Math.PI * 2;
       const scale = 0.85 + Math.random() * 0.35;
@@ -3257,9 +4153,20 @@ function buildCampfireLevel(level) {
   }
 
   if (level >= 4) {
-    for (let i = 0; i < 9; i += 1) {
+    // A low crib of horizontal logs turns the teepee into a bigger pile.
+    for (let layer = 0; layer < 2; layer += 1) {
+      for (const side of [-1, 1]) {
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 1.8 - layer * 0.2, 7), campfireLogMaterial);
+        log.rotation.z = Math.PI / 2;
+        log.rotation.y = layer === 0 ? 0 : Math.PI / 2;
+        log.position.set(layer === 0 ? 0 : side * 0.42, 0.25 + layer * 0.3, layer === 0 ? side * 0.42 : 0);
+        log.castShadow = true;
+        campfireVisual.add(log);
+      }
+    }
+    for (let i = 0; i < 14; i += 1) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 0.5 + Math.random() * 1.15;
+      const radius = 0.5 + Math.random() * 1.35;
       const ember = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.11), campfireEmberMaterial);
       ember.position.set(Math.cos(angle) * radius, 0.05, Math.sin(angle) * radius);
       ember.rotation.y = Math.random() * Math.PI;
@@ -3268,32 +4175,62 @@ function buildCampfireLevel(level) {
   }
 
   if (level >= 5) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.95, 0.075, 6, 20), campfireIronMaterial);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.085, 6, 22), campfireIronMaterial);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.1;
     ring.castShadow = true;
     campfireVisual.add(ring);
-    for (let i = 0; i < 4; i += 1) {
-      const angle = (i / 4) * Math.PI * 2 + 0.4;
-      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), campfireIronMaterial);
-      brace.position.set(Math.cos(angle) * 1.95, 0.28, Math.sin(angle) * 1.95);
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (i / 6) * Math.PI * 2 + 0.4;
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, 0.12), campfireIronMaterial);
+      brace.position.set(Math.cos(angle) * 2.18, 0.32, Math.sin(angle) * 2.18);
       brace.rotation.y = -angle;
       campfireVisual.add(brace);
     }
+    for (let i = 0; i < 5; i += 1) {
+      const angle = (i / 5) * Math.PI * 2 + 0.1;
+      addFireLog(
+        campfireVisual,
+        new THREE.Vector3(Math.cos(angle) * 2.05, 0.12, Math.sin(angle) * 2.05),
+        new THREE.Vector3(Math.cos(angle) * 0.35, 1.5, Math.sin(angle) * 0.35),
+        0.17,
+        campfireLogDarkMaterial
+      );
+    }
   }
 
-  campfireVisual.scale.setScalar(0.62);
+  campfireVisual.scale.setScalar(level === 1 ? 0.7 : 0.56);
   state.fireGrow = 0;
 
   if (fireFlameInner && fireFlameInner.material) {
     fireFlameInner.material.color.setHex(level >= 5 ? 0xd8f4ff : 0xffe28a);
   }
   if (fireFlame && fireFlame.material) {
-    fireFlame.material.color.setHex(level >= 5 ? 0x7ecbff : 0xff7b22);
+    fireFlame.material.color.setHex(level >= 5 ? 0xff9a3a : 0xff7b22);
+    fireFlame.material.opacity = level >= 5 ? 0.72 : 0.58;
+  }
+  if (fireCore && fireCore.material) {
+    fireCore.material.color.setHex(level >= 5 ? 0xd7f5ff : 0xff8a2a);
+    fireCore.material.emissive.setHex(level >= 5 ? 0x6fc8ff : 0xff6b18);
   }
 
   const radius = FIRE_SAFE_RADII[level] || 8;
   updateSafeRing(radius);
+  if (safeRing) safeRing.visible = false;
+
+  const lit = !state.fireOut;
+  fireCore.visible = lit;
+  fireFlame.visible = lit;
+  fireFlameInner.visible = lit;
+  fireSparks.visible = lit;
+  if (!lit) {
+    fireGlow.intensity = 0;
+    warmLight.intensity = 0;
+    sparkGeometry.setDrawRange(0, 0);
+    smokePuffs.forEach((puff) => { puff.material.opacity = 0; });
+  }
+  emberBed.material.emissiveIntensity = lit ? 0.55 : (state.fireEverLit ? 0.58 : 0.02);
+  fireBarDirty = true;
 }
 
 function updateSafeRing(radius) {
@@ -3312,11 +4249,11 @@ function updateSafeRing(radius) {
   }
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineDashedMaterial({
-    color: 0xffb066,
+    color: 0xdce8e2,
     transparent: true,
-    opacity: 0.32,
-    dashSize: 0.42,
-    gapSize: 0.36,
+    opacity: 0.23,
+    dashSize: 0.46,
+    gapSize: 0.4,
     depthWrite: false
   });
   safeRing = new THREE.LineLoop(geometry, material);
@@ -3338,7 +4275,7 @@ function showStartHint() {
 }
 
 const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(110, 24, 24),
+  new THREE.SphereGeometry(1150, 24, 24),
   new THREE.MeshBasicMaterial({
     color: 0x061821,
     side: THREE.BackSide,
@@ -3410,6 +4347,8 @@ const state = {
   portrait: false,
   paused: false,
   fireOut: true,
+  fireEverLit: false,
+  fireBarMessageTimer: 0,
   fireFlare: 0,
   fireInReach: false,
   chopTimer: 0,
@@ -3519,10 +4458,8 @@ function updateHud() {
   updateHotbarLabels();
   updatePlaceButton();
 
-  const fireIsOut = state.started && state.fireOut;
+  const fireIsOut = state.started && state.fireEverLit && state.fireOut;
   fireWarning.classList.toggle('visible', fireIsOut);
-
-  updateFireHud();
 
   backpackBadge.textContent = `${backpackCount()}/${state.backpackCapacity}`;
   inventoryCapacity.textContent = `${backpackCount()} / ${state.backpackCapacity}`;
@@ -3540,8 +4477,7 @@ function updateActionButtons() {
   const canUnstore = sackEquipped && state.sackOrder.length > 0;
   const nearGrinder = dragging && (type === 'wood' || type === 'iron')
     && getGrinderDistance() <= GRINDER_RANGE;
-  const nearFire = dragging && type === 'wood'
-    && getCampfireDistance() <= FIRE_FEED_RANGE;
+  const nearFire = dragging && getCampfireDistance() <= FIRE_FEED_RANGE;
 
   undragBtn.classList.toggle('available', dragging);
 
@@ -3565,29 +4501,6 @@ function updateActionButtons() {
   unstoreBtn.disabled = handsFull;
   const unstoreLabel = unstoreBtn.querySelector('span');
   if (unstoreLabel) unstoreLabel.textContent = handsFull ? 'HANDS FULL' : 'UNSTORE';
-}
-
-function updateFireHud() {
-  const level = state.fireLevel;
-  const progress = clamp(state.fireProgress, 0, 100);
-  const full = progress >= 99.95;
-  if (level >= FIRE_LEVEL_MAX && full) {
-    fireCounterText.textContent = `level ${level} progress: MAX`;
-  } else {
-    fireCounterText.textContent = `level ${level} progress: ${Math.round(progress)}/100`;
-  }
-  fireCounterFill.style.width = `${progress}%`;
-  let color = '#3fbf73';
-  let glow = 'rgba(95, 232, 139, 0.55)';
-  if (progress < 20) {
-    color = '#e04b3f';
-    glow = 'rgba(240, 90, 72, 0.55)';
-  } else if (progress < 50) {
-    color = '#f0c144';
-    glow = 'rgba(250, 205, 95, 0.55)';
-  }
-  fireCounterFill.style.background = `linear-gradient(90deg, ${color}, ${color})`;
-  fireCounterFill.style.boxShadow = `0 0 10px ${glow}`;
 }
 
 function updateToolUi() {
@@ -4047,9 +4960,15 @@ function startGame() {
   state.fireDarken = 0;
   state.startHintTimer = 8;
   state.fireOut = true;
+  state.fireEverLit = false;
+  state.fireBarMessageTimer = 0;
+  state.fireGrow = 0;
   arenaWallRadius = ARENA_RADIUS_START;
-  arenaWall.scale.set(1, 1, 1);
+  updateWallVisual();
   wallExpansion = null;
+  wallShake = 0;
+  wallDust.visible = false;
+  resetForestExpansion();
   state.carriedPlaceable = null;
   state.targetRock = null;
   state.dropCooldown = 0;
@@ -4063,6 +4982,9 @@ function startGame() {
   state.hitEffectTimer = 0;
   toastTimer = 0;
   toastEl.classList.remove('visible');
+  clearTimeout(mapNoticeTimeout);
+  mapExpandedNotice.classList.remove('visible');
+  fireBarDirty = true;
   hideHitMeter();
   setInventoryOpen(false);
   closeCraftPanel();
@@ -4081,7 +5003,9 @@ function startGame() {
 
   resetPlacedWalls();
   resetIronRocks();
-  player.position.set(0, getGroundHeight(0, -3.5), -3.5);
+  // Spawn slightly to the side of the fire so the unlit log pile is clearly
+  // visible instead of being hidden behind the character's back.
+  player.position.set(3.1, getGroundHeight(3.1, -4.2), -4.2);
   player.rotation.y = 0;
   state.cameraInitialized = false;
   leftArm.rotation.set(0, 0, 0);
@@ -4342,6 +5266,11 @@ function handleWorldTap(clientX, clientY) {
       applyTapInteraction(owner);
       return;
     }
+    if (owner.kind === 'campfire') {
+      // Tapping the fire is intentionally inert; feeding happens with the
+      // contextual Put in fire button.
+      return;
+    }
     // A short tap always swings the held tool, even when the ray lands on scenery.
     attack();
     applyTapInteraction(owner);
@@ -4424,9 +5353,6 @@ function applyTapInteraction(owner) {
       return;
     }
     case 'campfire': {
-      if (getCampfireDistance() > TAP_REACH) return tooFar();
-      flashOutline(campfire);
-      tapCampfire();
       return;
     }
     default:
@@ -4496,7 +5422,7 @@ function harvestBerryBush(bush) {
 }
 
 function tapCampfire() {
-  showToast('');
+  // The fire is fed only through the contextual Put in fire action.
 }
 
 function setJumpHeld(held) {
@@ -4648,7 +5574,7 @@ function respawnAtCamp() {
   state.attackCooldown = 0;
   state.attackTimer = 0;
   state.swingCooldown = 0;
-  player.position.set(0, getGroundHeight(0, 3.6), 3.6);
+  player.position.set(3.1, getGroundHeight(3.1, -4.2), -4.2);
   player.rotation.y = 0;
   leftArm.rotation.set(0, 0, 0);
   rightArm.rotation.set(0, 0, 0);
@@ -4673,6 +5599,7 @@ function spawnNightWave() {
     return;
   }
   const count = Math.min(state.night + 1 + (state.fireLevel - 1) * 2, MAX_ENEMIES);
+  const spawnCenter = Math.min(arenaWallRadius - 8, 30 + (state.fireLevel - 1) * 16);
 
   for (let i = 0; i < enemies.length; i += 1) {
     const enemy = enemies[i];
@@ -4683,7 +5610,7 @@ function spawnNightWave() {
     }
 
     const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-    const radius = 33 + Math.random() * 6;
+    const radius = Math.max(18, spawnCenter - 5 + Math.random() * 8);
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
     resetEnemyAppearance(enemy);
@@ -4861,8 +5788,7 @@ function movePlayer(delta) {
   player.position.z = nextZ;
   resolveTreeCollisions();
   resolveWorldPropCollisions(player);
-  player.position.x = clamp(player.position.x, -30, 30);
-  player.position.z = clamp(player.position.z, -30, 30);
+  clampToArena(player.position, 0.9);
 }
 
 // A two-phase chop: lift the arm up from the armed pose, then bring the tool
@@ -5080,11 +6006,10 @@ function updateEnemies(delta) {
       }
     }
 
-    enemy.position.x = clamp(nextX, -46, 46);
-    enemy.position.z = clamp(nextZ, -46, 46);
+    enemy.position.x = nextX;
+    enemy.position.z = nextZ;
     resolveWorldPropCollisions(enemy, 0.36);
-    enemy.position.x = clamp(enemy.position.x, -46, 46);
-    enemy.position.z = clamp(enemy.position.z, -46, 46);
+    clampToArena(enemy.position, 1.2);
     enemy.position.y = getGroundHeight(enemy.position.x, enemy.position.z);
 
     const faceX = targetX - enemy.position.x;
@@ -5142,6 +6067,8 @@ function updateCampfire(delta) {
       state.fireProgress = 0;
       state.fireOut = true;
       state.fireFlare = 0;
+      state.fireBarMessageTimer = 0;
+      fireBarDirty = true;
       fireWarning.classList.add('visible');
       showToast('The fire is out!');
       playFireOutTone();
@@ -5149,6 +6076,7 @@ function updateCampfire(delta) {
   }
 
   state.fireFlare = Math.max(0, state.fireFlare - delta * 1.6);
+  updateLogBurst(delta);
 
   const burning = !state.fireOut;
   const ratio = clamp(state.fireProgress / 100, 0, 1);
@@ -5174,7 +6102,8 @@ function updateCampfire(delta) {
   const flicker = 0.85 + Math.sin(t * 17.3) * 0.12 + Math.sin(t * 29.7 + 0.7) * 0.08;
   const growRate = 1 - Math.exp(-7 * delta);
   state.fireGrow = Math.min(1, state.fireGrow + growRate * 1.4);
-  const growScale = 0.62 + state.fireGrow * 0.38;
+  const growBase = state.fireLevel === 1 ? 0.7 : 0.56;
+  const growScale = growBase + state.fireGrow * (1 - growBase);
   campfireVisual.scale.setScalar(growScale);
 
   fireCore.visible = burning;
@@ -5182,22 +6111,24 @@ function updateCampfire(delta) {
   fireFlameInner.visible = burning;
   fireSparks.visible = burning;
 
-  emberBed.material.emissiveIntensity = burning ? 0.25 + ratio * 0.55 : 0.7 + Math.sin(t * 3) * 0.15;
+  const emberGlow = state.fireEverLit ? 0.58 + Math.sin(t * 3) * 0.12 : 0.02;
+  emberBed.material.emissiveIntensity = burning ? 0.25 + ratio * 0.55 : emberGlow;
 
   if (safeRing) {
     safeRing.visible = burning && state.started;
     if (safeRing.material) {
-      safeRing.material.opacity = 0.2 + Math.sin(t * 1.6) * 0.06 + (burning ? 0.08 : 0);
+      safeRing.material.opacity = burning ? 0.2 + Math.sin(t * 1.6) * 0.035 : 0;
     }
   }
 
   if (burning) {
     const height = FIRE_FLAME_HEIGHTS[state.fireLevel] || 1;
-    const width = 0.42 + height * 0.24;
+    const width = 0.42 + height * 0.27;
     const sway = Math.sin(t * 9) * 0.06;
     const flare = state.fireFlare;
+    const levelScale = 0.82 + state.fireLevel * 0.1;
 
-    fireCore.scale.setScalar((0.7 + ratio * 0.35) * (1 + Math.sin(t * 12) * 0.08) + flare * 0.4);
+    fireCore.scale.setScalar(((0.7 + ratio * 0.35) * (1 + Math.sin(t * 12) * 0.08) + flare * 0.4) * levelScale);
     fireCore.position.y = 0.42 + Math.sin(t * 6) * 0.04;
     fireCore.rotation.y += delta * 2.4;
 
@@ -5212,13 +6143,13 @@ function updateCampfire(delta) {
     fireFlameInner.position.y = 0.18 + height * 0.44 + Math.sin(t * 10 + 1) * 0.04;
     fireFlameInner.rotation.z = -sway * 0.8;
 
-    fireGlow.intensity = (1.5 + height * 0.75 + ratio * 0.7) * flicker + flare * 4;
-    fireGlow.distance = 9 + height * 3.6;
-    warmLight.intensity = (0.5 + height * 0.28 + ratio * 0.45) * flicker + flare * 2.2;
-    warmLight.distance = 14 + height * 3.2;
-    sparkMaterial.size = 0.055 + (state.fireLevel - 1) * 0.008;
-    sparkMaterial.opacity = 0.5 + ratio * 0.3 + Math.sin(t * 13) * 0.1;
-    updateSparks(delta, clamp(0.2 + ratio, 0, 1));
+    fireGlow.intensity = (0.7 + height * 0.72 + ratio * 0.7) * flicker + flare * 4;
+    fireGlow.distance = 8 + height * 4;
+    warmLight.intensity = (0.28 + height * 0.28 + ratio * 0.45) * flicker + flare * 2.2;
+    warmLight.distance = 12 + height * 3.6;
+    sparkMaterial.size = 0.055 + (state.fireLevel - 1) * 0.01;
+    sparkMaterial.opacity = 0.5 + ratio * 0.28 + Math.sin(t * 13) * 0.1;
+    updateSparks(delta, clamp(0.2 + ratio, 0, 1), state.fireLevel);
 
     if (state.fireLevel >= 5) {
       smokePuffs.forEach((puff, i) => {
@@ -5235,13 +6166,14 @@ function updateCampfire(delta) {
     smokePuffs.forEach((puff) => { puff.material.opacity = 0; });
   }
 
-  if (burning && state.fireLevel < 5) {
+  if (burning) {
+    const smokeRate = state.fireLevel >= 5 ? 0.75 : 1;
     for (let i = 0; i < smokePuffs.length; i += 1) {
       const puff = smokePuffs[i];
       const phase = (t * 0.42 + i / smokePuffs.length) % 1;
       puff.position.set(Math.sin(t * 1.4 + i) * 0.14, 1.5 + phase * 1.8, Math.cos(t * 1.2 + i) * 0.12);
       puff.scale.setScalar(0.6 + phase * 1.05);
-      puff.material.opacity = 0.09 * (1 - phase);
+      puff.material.opacity = 0.09 * (1 - phase) * smokeRate;
     }
   }
 
@@ -5249,6 +6181,7 @@ function updateCampfire(delta) {
     const playerGlowPulse = 0.48 + Math.sin(t * 14) * 0.2;
     playerGlow.intensity = playerGlowPulse;
   }
+
 }
 
 const skyDayColor = new THREE.Color(0x6f9aa4);
@@ -5273,7 +6206,7 @@ function applyDayNightVisuals() {
 
   workColorB.copy(fogDayColor).lerp(fogNightColor, nightFactor);
   scene.fog.color.copy(workColorB);
-  scene.fog.density = 0.018 + nightFactor * 0.04;
+  scene.fog.density = 0.014 + nightFactor * 0.042;
 
   ambient.color.copy(ambientDayColor).lerp(ambientNightColor, nightFactor);
   ambient.intensity = 1.0 - nightFactor * 0.45;
@@ -5282,7 +6215,7 @@ function applyDayNightVisuals() {
 
   phaseIcon.classList.toggle('night', nightFactor > 0.5);
 
-  const fireOutExtra = state.started && state.fireOut
+  const fireOutExtra = state.started && state.fireEverLit && state.fireOut
     ? 0.1 + state.fireDarken * 0.4
     : 0;
   darkness.style.opacity = String(clamp(nightFactor * 0.3 + fireOutExtra, 0, 0.9));
@@ -5446,6 +6379,7 @@ function updateCamera(delta = 0.016) {
   }
   const floor = getGroundHeight(camera.position.x, camera.position.z) + 0.28;
   if (camera.position.y < floor) camera.position.y = floor;
+  clampToArena(camera.position, 0.45);
 
   // Third-person looks at the head pivot; first-person looks straight ahead.
   cameraLookTarget.copy(cameraPivot).lerp(
@@ -5453,6 +6387,14 @@ function updateCamera(delta = 0.016) {
     blend
   );
   camera.lookAt(cameraLookTarget);
+
+  if (wallShake > 0) {
+    const shakeTime = performance.now() * 0.001;
+    const amount = wallShake * 0.13;
+    camera.position.x += Math.sin(shakeTime * 43.7) * amount;
+    camera.position.y += Math.sin(shakeTime * 51.3 + 1.7) * amount * 0.6;
+    camera.position.z += Math.cos(shakeTime * 47.1 + 0.4) * amount;
+  }
 
   const fov = THIRD_FOV + (FIRST_FOV - THIRD_FOV) * blend;
   if (Math.abs(camera.fov - fov) > 0.01) {
@@ -5527,13 +6469,6 @@ function updateWorldPrompts(delta) {
   }
 
   camera.updateMatrixWorld();
-
-  const showFire = state.started && !state.gameOver && !state.portrait;
-  fireCounter.classList.toggle('visible', showFire);
-  if (showFire) {
-    const target = new THREE.Vector3(campfire.position.x, campfire.position.y + 3, campfire.position.z);
-    fireCounter.style.visibility = projectPrompt(fireCounter, target) ? 'visible' : 'hidden';
-  }
 
   const showBench = state.started && !state.gameOver && !state.portrait
     && !state.craftOpen && getBenchDistance() <= BENCH_PROMPT_RANGE;
@@ -5736,6 +6671,18 @@ function playFireOutTone() {
   playNoise(0.5, 0.03, 'lowpass', 500, 120);
 }
 
+function playFireIgnite() {
+  playNoise(0.65, 0.075, 'bandpass', 700, 220, 0.9);
+  playTone(160, 520, 0.42, 'sawtooth', 0.032);
+  playTone(392, 784, 0.34, 'triangle', 0.025, 0.05);
+}
+
+function playRumble() {
+  playTone(58, 29, 1.5, 'sine', 0.075, 0.02, 0.03);
+  playTone(92, 42, 1.1, 'triangle', 0.035, 0.12, 0.04);
+  playNoise(1.35, 0.085, 'lowpass', 190, 46, 0.8);
+}
+
 function playNightSurvivedChime() {
   const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
   notes.forEach((freq, index) => {
@@ -5798,9 +6745,16 @@ function playFootstep() {
   playNoise(0.075, 0.022, 'lowpass', 480 + Math.random() * 180, 0, 0.7);
 }
 
-function playFireCrackle(proximity) {
-  const gain = 0.008 + proximity * 0.03;
-  playNoise(0.025 + Math.random() * 0.04, gain, 'highpass', 900 + Math.random() * 1400, 0, 0.9);
+function playFireCrackle(proximity, level = 1) {
+  const gain = (0.008 + proximity * 0.03) * (1 + (level - 1) * 0.3);
+  playNoise(
+    0.025 + Math.random() * 0.045,
+    gain,
+    'highpass',
+    900 + Math.random() * 1400,
+    0,
+    0.9
+  );
 }
 
 function playBirdChirp() {
@@ -5903,7 +6857,7 @@ function updateAudio(delta) {
   const fireProximity = clamp(1 - fireDistance / 18, 0, 1);
   const fireBurning = state.started && !state.fireOut && !state.gameOver;
   const fireRatio = clamp(state.fireProgress / 100, 0, 1);
-  const levelBoost = 1 + (state.fireLevel - 1) * 0.22;
+  const levelBoost = 1 + (state.fireLevel - 1) * 0.32;
   audio.fireGain.gain.setTargetAtTime(
     fireBurning ? (0.004 + fireProximity * 0.042) * (0.45 + fireRatio * 0.55) * levelBoost : 0.0001,
     now,
@@ -5913,8 +6867,9 @@ function updateAudio(delta) {
   if (fireBurning && !state.paused && fireProximity > 0.04) {
     audio.fireCrackleTimer -= delta;
     if (audio.fireCrackleTimer <= 0) {
-      playFireCrackle(fireProximity);
-      audio.fireCrackleTimer = 0.13 + Math.random() * 0.42 + (1 - fireProximity) * 0.55;
+      playFireCrackle(fireProximity, state.fireLevel);
+      audio.fireCrackleTimer = 0.13 + Math.random() * 0.42 + (1 - fireProximity) * 0.55
+        - (state.fireLevel - 1) * 0.035;
     }
   }
 
@@ -6085,7 +7040,8 @@ function animate() {
       } else {
         movePlayer(delta);
       }
-      updateArenaWall(delta);
+      updateArenaWall(Math.min(rawDelta, 0.2));
+      processForestQueue();
       clampToArena(player.position);
       updatePlayerVertical(delta);
       updateEnemies(delta);
@@ -6121,9 +7077,11 @@ function animate() {
     overlay.classList.remove('hidden');
   }
 
+  updateFireBar(Math.min(rawDelta, 0.2));
   updateAudio(delta);
   applyDayNightVisuals();
   updateCamera(delta);
+  sky.position.copy(camera.position);
   updateWorldPrompts(delta);
   updateHitMeter(delta);
   renderer.render(scene, camera);
@@ -6142,12 +7100,17 @@ if (safeRing) safeRing.visible = false;
 updateHotbarLabels();
 updateHud();
 applyDayNightVisuals();
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { fireBarDirty = true; });
+}
 if (import.meta.env.DEV) {
   window.__nightsDebug = {
     state,
     enemies,
     player,
     campfire,
+    campfireVisual,
+    safeRing: () => safeRing,
     camera,
     canvas,
     axe,
@@ -6167,6 +7130,8 @@ if (import.meta.env.DEV) {
     plantSapling,
     attack,
     pickUpItem,
+    undragItem,
+    heldItem: () => heldItem,
     addItemToBackpack,
     equipTool,
     unequipTool,
@@ -6207,6 +7172,34 @@ if (import.meta.env.DEV) {
     levelUpCampfire,
     buildCampfireLevel,
     updateCampfire,
+    fireBar,
+    fireBarCanvas,
+    fireBarColorFor,
+    drawFireBar,
+    arenaWall,
+    arenaWallRadius: () => arenaWallRadius,
+    wallExpansion: () => wallExpansion,
+    wallShake: () => wallShake,
+    clampToArena,
+    beginWallExpansion,
+    ensureForestRingQueued,
+    processForestQueue,
+    buildForestChunk,
+    forestStats,
+    forestQueue,
+    generatedForestGroup,
+    resetForestExpansion,
+    well,
+    pond,
+    noticeBoard,
+    mapExpandedNotice,
+    scene,
+    renderer,
+    updateArenaWall,
+    ARENA_RADIUS_BY_LEVEL,
+    FIRE_SAFE_RADII,
+    getFireScareRadius,
+    getCampfireSafeRadius,
     setSettingsOpen,
     createIronWall,
     resolveWorldPropCollisions,

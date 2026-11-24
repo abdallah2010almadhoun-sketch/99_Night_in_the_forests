@@ -1504,52 +1504,54 @@ button {
 
 /* First-person viewmodel arm + tool are rendered by the camera itself. */
 
-/* ---------- Leveling campfire HUD ---------- */
+/* ---------- Map expansion notice ---------- */
 
-.fire-counter {
+.map-expanded-notice {
   position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 25;
-  width: 188px;
-  opacity: 0;
+  left: max(14px, env(safe-area-inset-left));
+  top: max(104px, calc(env(safe-area-inset-top) + 96px));
+  z-index: 42;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(74vw, 350px);
+  padding: 10px 14px 11px;
+  border: 1px solid rgba(74, 56, 34, 0.35);
+  border-radius: 12px;
+  background: rgba(214, 188, 142, 0.9);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3), inset 0 1px rgba(255, 255, 255, 0.25);
+  color: #17130e;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: clamp(14px, 2.3vw, 19px);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
   pointer-events: none;
-  text-align: center;
-  transform: translate(-50%, -100%);
-  transition: opacity 0.2s ease;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-7px);
+  transition: opacity 0.28s ease, transform 0.28s ease, visibility 0s linear 0.28s;
 }
 
-.fire-counter.visible {
+.map-expanded-notice.visible {
   opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  animation: mapNoticeFade 9s ease forwards;
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
 
-#fireCounterText {
-  display: block;
-  margin-bottom: 4px;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  text-shadow: 0 1px 2px #000, 0 0 4px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000;
+.notice-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2f2a20;
+  box-shadow: 0 0 0 3px rgba(47, 42, 32, 0.13);
 }
 
-.fire-counter-track {
-  height: 13px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 4px;
-  background: #050808;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
-}
-
-.fire-counter-fill {
-  width: 50%;
-  height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, #3fbf73, #78e39a);
-  box-shadow: 0 0 10px rgba(95, 232, 139, 0.5);
-  transition: width 0.2s linear, background 0.3s ease;
+@keyframes mapNoticeFade {
+  0%, 82% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 #startHint {
@@ -2122,6 +2124,5 @@ button {
   .hotbar-slot svg { width: 28px; height: 28px; flex-basis: 28px; }
   .hotbar-label { font-size: 5px; }
   #startHint { top: max(58px, calc(env(safe-area-inset-top) + 52px)); font-size: 10px; padding: 5px 11px; }
-  #fireCounterText { font-size: 9px; }
-  .fire-counter { width: 160px; }
+  .map-expanded-notice { top: max(82px, calc(env(safe-area-inset-top) + 74px)); font-size: 13px; padding: 8px 11px; }
 }
