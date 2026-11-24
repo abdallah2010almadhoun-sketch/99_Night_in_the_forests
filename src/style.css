@@ -552,9 +552,22 @@ button {
   letter-spacing: 0.05em;
   text-align: center;
   touch-action: none;
-  pointer-events: auto;
-  transition: transform 0.12s ease, opacity 0.18s ease, background 0.2s ease, box-shadow 0.2s ease;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(0.86);
+  transition: transform 0.14s ease, opacity 0.18s ease, visibility 0s linear 0.18s,
+    background 0.2s ease, box-shadow 0.2s ease;
   will-change: transform;
+}
+
+.action-btn.available {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition: transform 0.14s ease, opacity 0.18s ease, visibility 0s linear 0s,
+    background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .action-btn small {
@@ -565,8 +578,13 @@ button {
   letter-spacing: 0.1em;
 }
 
-.action-btn:active {
+.action-btn.available:active {
   transform: scale(0.91);
+}
+
+.action-btn:disabled {
+  opacity: 0.48;
+  filter: grayscale(0.5);
 }
 
 #jumpBtn {
@@ -580,23 +598,31 @@ button {
   box-shadow: 0 0 24px rgba(75, 214, 164, 0.22), inset 0 1px rgba(255, 255, 255, 0.18);
 }
 
-#dropBtn {
-  right: 126px;
-  bottom: 82px;
-  width: 60px;
-  height: 60px;
+#undragBtn {
+  right: 5px;
+  bottom: 94px;
+  width: 64px;
+  height: 64px;
+  font-size: 9px;
+  border-color: rgba(255, 206, 128, 0.55);
+  background: radial-gradient(circle at 34% 28%, rgba(148, 105, 52, 0.62), rgba(35, 23, 12, 0.72));
+}
+
+.context-btn {
+  width: 62px;
+  height: 62px;
+  font-size: 9px;
+  line-height: 1.05;
   border-color: rgba(214, 230, 235, 0.36);
   background: radial-gradient(circle at 34% 28%, rgba(62, 82, 90, 0.58), rgba(10, 21, 26, 0.7));
 }
 
-#plantBtn {
-  right: 126px;
-  bottom: 16px;
-  width: 60px;
-  height: 60px;
-  border-color: rgba(150, 226, 167, 0.5);
-  background: radial-gradient(circle at 34% 28%, rgba(66, 158, 98, 0.55), rgba(11, 38, 24, 0.7));
-}
+.context-btn.slot-a { right: 96px; bottom: 100px; }
+.context-btn.slot-b { right: 96px; bottom: 24px; }
+.context-btn.slot-c { right: 164px; bottom: 100px; }
+.context-btn.slot-d { right: 164px; bottom: 24px; }
+.context-btn.slot-e { right: 96px; bottom: 170px; }
+.context-btn.slot-f { right: 164px; bottom: 170px; }
 
 /* ---------- Hotbar ---------- */
 
@@ -1087,21 +1113,24 @@ button {
     font-size: 13px;
   }
 
-  #dropBtn {
-    right: 110px;
-    bottom: 72px;
-    width: 53px;
-    height: 53px;
-    font-size: 9px;
+  .context-btn {
+    width: 54px;
+    height: 54px;
+    font-size: 8px;
   }
 
-  #plantBtn {
-    right: 110px;
-    bottom: 12px;
-    width: 53px;
-    height: 53px;
-    font-size: 9px;
+  #undragBtn {
+    width: 56px;
+    height: 56px;
+    bottom: 82px;
   }
+
+  .context-btn.slot-a { right: 84px; bottom: 88px; }
+  .context-btn.slot-b { right: 84px; bottom: 20px; }
+  .context-btn.slot-c { right: 144px; bottom: 88px; }
+  .context-btn.slot-d { right: 144px; bottom: 20px; }
+  .context-btn.slot-e { right: 84px; bottom: 150px; }
+  .context-btn.slot-f { right: 144px; bottom: 150px; }
 
   #hotbar {
     gap: 8px;
@@ -1188,21 +1217,24 @@ button {
     font-size: 12px;
   }
 
-  #dropBtn {
-    right: 101px;
-    bottom: 66px;
-    width: 48px;
-    height: 48px;
-    font-size: 8px;
+  .context-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 7px;
   }
 
-  #plantBtn {
-    right: 101px;
-    bottom: 10px;
-    width: 48px;
-    height: 48px;
-    font-size: 8px;
+  #undragBtn {
+    width: 52px;
+    height: 52px;
+    bottom: 76px;
   }
+
+  .context-btn.slot-a { right: 78px; bottom: 80px; }
+  .context-btn.slot-b { right: 78px; bottom: 18px; }
+  .context-btn.slot-c { right: 134px; bottom: 80px; }
+  .context-btn.slot-d { right: 134px; bottom: 18px; }
+  .context-btn.slot-e { right: 78px; bottom: 138px; }
+  .context-btn.slot-f { right: 134px; bottom: 138px; }
 
   .hotbar-slot {
     width: 44px;
@@ -1546,6 +1578,86 @@ button {
   transform: translate(-50%, 0);
 }
 
+/* ---------- Handwritten world labels ---------- */
+
+.hand-label {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 27;
+  color: #ffffff;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -100%);
+  transition: opacity 0.16s ease, visibility 0s linear 0.16s;
+  -webkit-text-stroke: 1.4px #050505;
+  paint-order: stroke fill;
+  text-shadow:
+    2px 0 #050505, -2px 0 #050505, 0 2px #050505, 0 -2px #050505,
+    2px 2px #050505, -2px 2px #050505, 2px -2px #050505, -2px -2px #050505,
+    0 3px 6px rgba(0, 0, 0, 0.75);
+}
+
+.hand-label.visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.16s ease, visibility 0s linear 0s;
+}
+
+.drag-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.drag-flames {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  min-height: 19px;
+}
+
+.drag-flames:empty {
+  display: none;
+}
+
+.drag-flame {
+  width: 12px;
+  height: 17px;
+  border-radius: 50% 50% 46% 46% / 64% 64% 36% 36%;
+  background: radial-gradient(circle at 50% 72%, #fff6ae 0%, #ffcc3d 38%, #ff8a16 68%, rgba(232, 84, 10, 0.15) 100%);
+  box-shadow: 0 0 8px rgba(255, 156, 36, 0.9);
+  transform: rotate(-3deg);
+}
+
+.drag-flame:nth-child(even) {
+  transform: rotate(4deg) translateY(-2px);
+}
+
+.sack-counter {
+  font-size: 30px;
+}
+
+.sack-counter.pop {
+  animation: sackCounterPop 0.3s ease;
+}
+
+@keyframes sackCounterPop {
+  0% { transform: translate(-50%, -100%) scale(1); }
+  45% { transform: translate(-50%, -100%) scale(1.32); }
+  100% { transform: translate(-50%, -100%) scale(1); }
+}
+
 #fireFlash {
   position: fixed;
   inset: 0;
@@ -1601,10 +1713,6 @@ button {
 /* ---------- Place button ---------- */
 
 #placeBtn {
-  right: 4px;
-  bottom: 96px;
-  width: 64px;
-  height: 64px;
   border-color: rgba(255, 196, 112, 0.55);
   background: radial-gradient(circle at 34% 28%, rgba(164, 112, 51, 0.64), rgba(37, 24, 11, 0.75));
   box-shadow: 0 0 18px rgba(255, 177, 73, 0.2), inset 0 1px rgba(255, 255, 255, 0.18);
@@ -2013,7 +2121,6 @@ button {
   .hotbar-slot { width: 42px; height: 52px; padding: 3px 2px 2px; border-radius: 11px; }
   .hotbar-slot svg { width: 28px; height: 28px; flex-basis: 28px; }
   .hotbar-label { font-size: 5px; }
-  #placeBtn { right: 3px; bottom: 84px; width: 56px; height: 56px; font-size: 9px; }
   #startHint { top: max(58px, calc(env(safe-area-inset-top) + 52px)); font-size: 10px; padding: 5px 11px; }
   #fireCounterText { font-size: 9px; }
   .fire-counter { width: 160px; }

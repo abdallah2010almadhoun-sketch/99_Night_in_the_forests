@@ -7,8 +7,11 @@
     <meta name="description" content="99 Nights - low-poly survival in a dark forest" />
     <meta name="theme-color" content="#040b10" />
     <link rel="icon" href="data:," />
-    <script type="module" crossorigin src="./assets/index-BwtTwkoJ.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CvZR5ILC.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="./assets/index-gx0o-oVH.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-D2f2P6k2.css">
   </head>
   <body>
     <canvas id="game"></canvas>
@@ -50,6 +53,11 @@
       <div class="fire-counter-track"><div id="fireCounterFill" class="fire-counter-fill"></div></div>
     </div>
     <div id="startHint" class="start-hint">Chop trees, then place wood on the fire</div>
+    <div id="dragLabel" class="hand-label drag-label" aria-hidden="true">
+      <div id="dragFlames" class="drag-flames"></div>
+      <span id="dragName">Log</span>
+    </div>
+    <div id="sackCounter" class="hand-label sack-counter" aria-hidden="true">0/5</div>
     <div id="fireFlash" aria-hidden="true"></div>
     <div id="benchPrompt" class="bench-prompt hidden" aria-hidden="true">
       <span class="bench-hand">✋</span>
@@ -115,19 +123,39 @@
     </div>
 
     <div id="actionCluster" aria-label="Action buttons">
-      <button id="placeBtn" class="action-btn" aria-label="Place carried wall or trap" style="display: none">
+      <button id="placeBtn" class="action-btn context-btn" aria-label="Place carried wall or trap">
         <span>PLACE</span>
         <small>P</small>
       </button>
-      <button id="plantBtn" class="action-btn" aria-label="Plant a sapling" style="display: none">
+      <button id="plantBtn" class="action-btn context-btn" aria-label="Plant a sapling">
         <span>PLANT</span>
         <small>Q</small>
       </button>
-      <button id="dropBtn" class="action-btn" aria-label="Drop items">
-        <span>DROP</span>
+      <button id="eatBtn" class="action-btn context-btn" aria-label="Eat dragged food">
+        <span>EAT</span>
+        <small>E</small>
+      </button>
+      <button id="storeBtn" class="action-btn context-btn" aria-label="Store dragged item in sack">
+        <span>STORE</span>
+        <small>SACK</small>
+      </button>
+      <button id="unstoreBtn" class="action-btn context-btn" aria-label="Take the last item out of the sack">
+        <span>UNSTORE</span>
+        <small>SACK</small>
+      </button>
+      <button id="grinderBtn" class="action-btn context-btn" aria-label="Put dragged item in grinder">
+        <span>PUT IN GRINDER</span>
+        <small>IRON</small>
+      </button>
+      <button id="fireBtn" class="action-btn context-btn" aria-label="Put dragged log in fire">
+        <span>PUT IN FIRE</span>
+        <small>LOG</small>
+      </button>
+      <button id="undragBtn" class="action-btn" aria-label="Release dragged item">
+        <span>UNDRAG</span>
         <small>F</small>
       </button>
-      <button id="jumpBtn" class="action-btn" aria-label="Jump">
+      <button id="jumpBtn" class="action-btn available" aria-label="Jump">
         <span>JUMP</span>
         <small>SHIFT</small>
       </button>
@@ -146,7 +174,7 @@
       <button id="backpackSlot" class="hotbar-slot" data-tool="backpack" aria-label="Backpack" aria-pressed="false">
         <span class="hotbar-num">2</span>
         <span class="hotbar-label" id="backpackLabel">Old Sack</span>
-        <span id="backpackBadge" class="hotbar-badge">0/20</span>
+        <span id="backpackBadge" class="hotbar-badge">0/5</span>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <rect x="12" y="14" width="24" height="26" rx="7" fill="#8a5530" stroke="#d9a56b" stroke-width="1.4" />
           <path d="M13 23.5h22" stroke="#5c351d" stroke-width="1.7" />
@@ -190,7 +218,7 @@
     <div id="inventoryPanel" class="inventory-panel hidden" role="dialog" aria-label="Backpack inventory">
       <div class="inventory-head">
         <span class="inventory-title">BACKPACK</span>
-        <span id="inventoryCapacity" class="inventory-capacity">0 / 20</span>
+        <span id="inventoryCapacity" class="inventory-capacity">0 / 5</span>
         <button id="closeInventoryBtn" class="inventory-close" aria-label="Close inventory">×</button>
       </div>
       <div id="inventoryList" class="inventory-list"></div>

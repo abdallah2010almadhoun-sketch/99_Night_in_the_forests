@@ -12,7 +12,12 @@ const joystickBase = document.getElementById('joystickBase');
 const joystickKnob = document.getElementById('joystickKnob');
 const lookZone = document.getElementById('lookZone');
 const jumpBtn = document.getElementById('jumpBtn');
-const dropBtn = document.getElementById('dropBtn');
+const undragBtn = document.getElementById('undragBtn');
+const storeBtn = document.getElementById('storeBtn');
+const unstoreBtn = document.getElementById('unstoreBtn');
+const eatBtn = document.getElementById('eatBtn');
+const grinderBtn = document.getElementById('grinderBtn');
+const fireBtn = document.getElementById('fireBtn');
 const plantBtn = document.getElementById('plantBtn');
 const woodText = document.getElementById('woodText');
 const saplingText = document.getElementById('saplingText');
@@ -22,6 +27,10 @@ const fireCounter = document.getElementById('fireCounter');
 const fireCounterText = document.getElementById('fireCounterText');
 const fireCounterFill = document.getElementById('fireCounterFill');
 const startHint = document.getElementById('startHint');
+const dragLabel = document.getElementById('dragLabel');
+const dragName = document.getElementById('dragName');
+const dragFlames = document.getElementById('dragFlames');
+const sackCounter = document.getElementById('sackCounter');
 const fireFlash = document.getElementById('fireFlash');
 const benchPrompt = document.getElementById('benchPrompt');
 const placeBtn = document.getElementById('placeBtn');
@@ -627,36 +636,27 @@ const backpackBuckleMat = new THREE.MeshStandardMaterial({ color: 0xe0b260, roug
 function createBackpackModel(scale = 1) {
   const bag = new THREE.Group();
 
-  const body = new THREE.Mesh(new RoundedBoxGeometry(0.38, 0.44, 0.24, 3, 0.055), backpackMat);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 8), backpackMat);
+  body.scale.set(1, 1.12, 0.8);
+  body.position.y = -0.04;
   body.castShadow = true;
   body.receiveShadow = true;
   bag.add(body);
 
-  const flap = new THREE.Mesh(new RoundedBoxGeometry(0.37, 0.2, 0.25, 2, 0.04), backpackTrimMat);
-  flap.position.set(0, 0.16, 0.004);
-  flap.rotation.x = -0.06;
-  flap.castShadow = true;
-  bag.add(flap);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.17, 0.2, 8), backpackTrimMat);
+  neck.position.y = 0.27;
+  neck.castShadow = true;
+  bag.add(neck);
 
-  const pocket = new THREE.Mesh(new RoundedBoxGeometry(0.22, 0.13, 0.06, 2, 0.025), backpackTrimMat);
-  pocket.position.set(0, -0.1, 0.145);
-  pocket.castShadow = true;
-  bag.add(pocket);
+  const tie = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 5, 10), backpackBuckleMat);
+  tie.rotation.x = Math.PI / 2;
+  tie.position.y = 0.3;
+  bag.add(tie);
 
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.06, 0.035), backpackBuckleMat);
-  buckle.position.set(0, 0.09, 0.135);
-  bag.add(buckle);
-
-  for (const side of [-1, 1]) {
-    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.41, 0.035), backpackTrimMat);
-    strap.position.set(side * 0.12, 0, -0.145);
-    strap.castShadow = true;
-    bag.add(strap);
-
-    const sidePocket = new THREE.Mesh(new RoundedBoxGeometry(0.055, 0.16, 0.15, 2, 0.02), backpackTrimMat);
-    sidePocket.position.set(side * 0.215, -0.08, 0);
-    bag.add(sidePocket);
-  }
+  const patch = new THREE.Mesh(new RoundedBoxGeometry(0.16, 0.12, 0.035, 2, 0.02), backpackTrimMat);
+  patch.position.set(0, -0.08, 0.215);
+  patch.castShadow = true;
+  bag.add(patch);
 
   bag.scale.setScalar(scale);
   return bag;
@@ -1334,8 +1334,10 @@ function resetIronRocks() {
   }
 }
 
-const FIRE_FEED_RANGE = 3;
+const FIRE_FEED_RANGE = 4;
 const GRINDER_RANGE = 3;
+const SACK_FIRE_RANGE = 6;
+const SACK_GRINDER_RANGE = 4;
 const BENCH_PROMPT_RANGE = 4;
 const BENCH_INTERACT_RANGE = 4;
 const TREE_INTERACT_RANGE = 2.5;
@@ -1358,8 +1360,8 @@ const DAWN_LENGTH = 14;
 const MAX_ENEMIES = 30;
 const PICKUP_RANGE = 3.35;
 const CARRY_LIMIT = 1;
-const DEFAULT_BACKPACK_CAPACITY = 20;
-const GOOD_SACK_CAPACITY = 35;
+const DEFAULT_BACKPACK_CAPACITY = 5;
+const GOOD_SACK_CAPACITY = 10;
 const HUNGER_DRAIN_PER_SECOND = 0.42;
 const BERRY_HUNGER = 18;
 const EQUIP_TIME = 0.3;
@@ -1381,6 +1383,15 @@ const ITEM_NAMES = {
   logWall: 'Log Wall',
   bearTrap: 'Bear Trap'
 };
+const DRAG_NAMES = {
+  wood: 'Log',
+  sapling: 'Sapling',
+  berry: 'Berries',
+  iron: 'Iron'
+};
+// Burnable dragged items advertise how many times the current per-log fire
+// progress they would add. Logs use one flame; two-flame fuel can be added later.
+const ITEM_FLAMES = { wood: 1 };
 const FIRE_FUEL_TYPES = new Set(['wood']);
 const TOOL_STATS = {
   axe: { cooldown: 0.58, damage: 1, treePower: 1, rockPower: 0, range: 3.3, reach: 2.5 },
@@ -1397,7 +1408,7 @@ const RECIPES = [
   { id: 'torch', tier: 1, name: 'Torch', icon: '🔥', cost: { wood: 2, iron: 1 }, desc: 'A warm light to carry into the dark.', kind: 'tool', repeatable: true },
   { id: 'bench2', tier: 1, name: 'Crafting Bench 2', icon: '🛠', cost: { wood: 8, iron: 6 }, desc: 'Upgrade the bench to unlock tier 2 gear.', kind: 'bench', oneTime: true, benchTier: 2 },
   { id: 'ironAxe', tier: 2, name: 'Good Axe', icon: '🪓', cost: { wood: 6, iron: 3 }, desc: 'Chops faster and hits harder. Replaces the Old Axe.', kind: 'tool', oneTime: true },
-  { id: 'goodSack', tier: 2, name: 'Good Sack', icon: '🎒', cost: { wood: 6, iron: 5 }, desc: 'Backpack capacity grows from 20 to 35.', kind: 'sack', oneTime: true },
+  { id: 'goodSack', tier: 2, name: 'Good Sack', icon: '🎒', cost: { wood: 6, iron: 5 }, desc: 'Sack capacity grows from 5 to 10.', kind: 'sack', oneTime: true },
   { id: 'logWall', tier: 2, name: 'Log Wall', icon: '🪵', cost: { wood: 12 }, desc: 'A sturdy wooden wall. Craft it, then place it.', kind: 'placeable', placeType: 'logWall', repeatable: true },
   { id: 'bearTrap', tier: 2, name: 'Bear Trap', icon: '⚙', cost: { iron: 3 }, desc: 'Damages and stuns a monster that steps on it.', kind: 'placeable', placeType: 'bearTrap', repeatable: true, trap: true },
   { id: 'bench3', tier: 2, name: 'Crafting Bench 3', icon: '🛠', cost: { wood: 15, iron: 10 }, desc: 'Upgrade the bench to unlock tier 3 gear.', kind: 'bench', oneTime: true, benchTier: 3 },
@@ -1840,6 +1851,7 @@ function addItemToBackpack(item) {
     return false;
   }
   state.backpack[item.type] += 1;
+  state.sackOrder.push(item.type);
   popGroundItem(item);
   updateHud();
   backpackSlot.classList.remove('pop');
@@ -1852,9 +1864,6 @@ function addItemToBackpack(item) {
 
 function pickUpItem(item) {
   if (!item || item.carried || item.popping > 0) return false;
-  if (isBackpackEquipped()) {
-    return addItemToBackpack(item);
-  }
   if (heldItem) {
     showToast('Hands full');
     return false;
@@ -1863,44 +1872,152 @@ function pickUpItem(item) {
   item.landed = true;
   item.pickupDelay = 0;
   heldItem = item;
+  // Place the item on the camera-facing side immediately; subsequent camera
+  // turns use the damped follow in updateGroundItems.
+  const yaw = state.cameraYaw;
+  item.mesh.position.set(
+    player.position.x - Math.cos(yaw) * 0.98 + Math.sin(yaw) * 0.22,
+    player.position.y + 1.0,
+    player.position.z + Math.sin(yaw) * 0.98 + Math.cos(yaw) * 0.22
+  );
   updateHud();
   playPickupSound();
-  showToast(`Picked up ${ITEM_NAMES[item.type]}`);
+  showToast(`Picked up ${DRAG_NAMES[item.type] || ITEM_NAMES[item.type]}`);
   return true;
 }
 
-function dropCarriedItems() {
+function undragItem() {
   if (!state.started || state.gameOver || state.falling || state.paused
     || state.craftOpen || state.settingsOpen || state.dropCooldown > 0 || !heldItem) return;
-
-  if (getGrinderDistance() <= GRINDER_RANGE) {
-    if (heldItem.type === 'wood' || heldItem.type === 'iron') putInGrinder();
-    else showToast("Can't grind this");
-    return;
-  }
-
-  if (getCampfireDistance() <= FIRE_FEED_RANGE) {
-    if (heldItem.type === 'wood') putLogInFire();
-    else showToast('Only logs burn');
-    return;
-  }
 
   const item = heldItem;
   heldItem = null;
   item.carried = false;
-  const angle = player.rotation.y;
-  const x = player.position.x + Math.sin(angle) * 1.15;
-  const z = player.position.z + Math.cos(angle) * 1.15;
+  const x = player.position.x;
+  const z = player.position.z;
   item.x = x;
   item.z = z;
   item.groundY = getGroundHeight(x, z);
-  item.velocityY = 1.3;
+  item.velocityY = 0.9;
   item.landed = false;
   item.pickupDelay = 0.3;
-  item.mesh.position.set(x, player.position.y + 0.8, z);
-  state.dropCooldown = 0.35;
+  item.mesh.position.set(x, player.position.y + 1.05, z);
+  state.dropCooldown = 0.3;
   updateHud();
-  showToast('Dropped item');
+  showToast('Released item');
+}
+
+function sackFreeSpace() {
+  return Math.max(0, state.backpackCapacity - backpackCount());
+}
+
+function removeLastSackItem(type) {
+  const index = state.sackOrder.lastIndexOf(type);
+  if (index < 0) return false;
+  state.sackOrder.splice(index, 1);
+  return true;
+}
+
+function takeLastFromSack() {
+  if (!state.sackOrder.length) return null;
+  const type = state.sackOrder.pop();
+  if (state.backpack[type] > 0) state.backpack[type] -= 1;
+  sackCounter.classList.remove('pop');
+  void sackCounter.offsetWidth;
+  sackCounter.classList.add('pop');
+  backpackSlot.classList.remove('pop');
+  void backpackSlot.offsetWidth;
+  backpackSlot.classList.add('pop');
+  return type;
+}
+
+function storeDraggedItem() {
+  if (!state.started || state.gameOver || state.falling || state.paused) return;
+  if (!isBackpackEquipped() || !heldItem) return;
+  if (sackFreeSpace() <= 0) {
+    showToast('Sack full');
+    return;
+  }
+  const item = heldItem;
+  heldItem = null;
+  state.backpack[item.type] = (state.backpack[item.type] || 0) + 1;
+  state.sackOrder.push(item.type);
+  popGroundItem(item);
+  backpackSlot.classList.remove('pop');
+  void backpackSlot.offsetWidth;
+  backpackSlot.classList.add('pop');
+  sackCounter.classList.remove('pop');
+  void sackCounter.offsetWidth;
+  sackCounter.classList.add('pop');
+  playPickupSound();
+  showToast(`Stored ${DRAG_NAMES[item.type] || ITEM_NAMES[item.type]}`);
+  updateHud();
+}
+
+function unstoreLastItem() {
+  if (!state.started || state.gameOver || state.falling || state.paused) return;
+  if (!isBackpackEquipped() || !state.sackOrder.length) return;
+  if (heldItem) {
+    showToast('Hands full');
+    return;
+  }
+
+  const lastType = state.sackOrder[state.sackOrder.length - 1];
+  if (lastType === 'wood' && getCampfireDistance() <= SACK_FIRE_RANGE) {
+    takeLastFromSack();
+    updateHud();
+    spawnFlyingItem(lastType, new THREE.Vector3(
+      campfire.position.x,
+      campfire.position.y + 0.8,
+      campfire.position.z
+    ), () => {
+      const gain = FIRE_GAIN_PER_LOG[state.fireLevel] || 2;
+      addFireProgress(gain);
+      showToast(`Log added (+${gain})`);
+    });
+    return;
+  }
+
+  if (getGrinderDistance() <= SACK_GRINDER_RANGE && (lastType === 'wood' || lastType === 'iron')) {
+    takeLastFromSack();
+    updateHud();
+    spawnFlyingItem(lastType, new THREE.Vector3(
+      grinder.position.x,
+      grinder.position.y + 1.45,
+      grinder.position.z
+    ), () => {
+      benchState.stock[lastType] += 1;
+      spawnGrinderDrop(lastType);
+      playGrinderSound();
+      grinderParts.shake = 0.5;
+      refreshCraftUi(lastType);
+      updateHud();
+      showToast(`+1 ${lastType} to the bench`);
+    });
+    return;
+  }
+
+  const type = takeLastFromSack();
+  const item = spawnGroundItem(type, player.position.x, player.position.z, {
+    startY: player.position.y + 1.05,
+    velocityY: 0.35,
+    pickupDelay: 0
+  });
+  item.landed = true;
+  pickUpItem(item);
+  updateHud();
+}
+
+function eatDraggedItem() {
+  if (!state.started || state.gameOver || state.falling || state.paused) return;
+  if (!heldItem || heldItem.type !== 'berry') return;
+  const item = heldItem;
+  heldItem = null;
+  popGroundItem(item);
+  state.hunger = clamp(state.hunger + BERRY_HUNGER, 0, 100);
+  playPickupSound();
+  showToast(`Ate berries (+${BERRY_HUNGER} hunger)`);
+  updateHud();
 }
 
 function addFireProgress(amount) {
@@ -2327,15 +2444,7 @@ function craftSelectedRecipe() {
 }
 
 function updatePlaceButton() {
-  const carried = !!state.carriedPlaceable;
-  placeBtn.style.display = carried ? 'flex' : 'none';
-  if (carried) {
-    const label = placeBtn.querySelector('span');
-    if (label) label.textContent = 'PLACE';
-  }
-  for (const [kind, model] of Object.entries(carriedPlaceableModels)) {
-    model.visible = state.carriedPlaceable === kind;
-  }
+  updateActionButtons();
 }
 
 function spawnWall(kind, x, z, rotation) {
@@ -2420,48 +2529,7 @@ function resetBearTraps() {
   placedTraps.length = 0;
 }
 
-// Walls and traps are carried visibly in the left hand until the Place button is used.
-const carriedPlaceableModels = {};
-{
-  const heldWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x7a4c25, roughness: 0.9 });
-  const heldWoodDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x4f2f16, roughness: 0.95 });
-  const heldIronMaterial = new THREE.MeshStandardMaterial({ color: 0x66747c, roughness: 0.42, metalness: 0.62 });
 
-  const heldLogWall = new THREE.Group();
-  for (let i = 0; i < 3; i += 1) {
-    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.18, 1.8, 6), heldWoodMaterial);
-    log.rotation.z = Math.PI / 2;
-    log.position.y = (i - 1) * 0.36;
-    heldLogWall.add(log);
-  }
-  carriedPlaceableModels.logWall = heldLogWall;
-
-  const heldIronWall = new THREE.Group();
-  for (let i = 0; i < 3; i += 1) {
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.02, 0.16), heldIronMaterial);
-    panel.position.x = (i - 1) * 0.54;
-    heldIronWall.add(panel);
-  }
-  carriedPlaceableModels.ironWall = heldIronWall;
-
-  const heldBearTrap = new THREE.Group();
-  const heldTrapRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 14), trapMaterial);
-  heldTrapRing.rotation.x = Math.PI / 2;
-  heldBearTrap.add(heldTrapRing);
-  const heldTrapBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.08, 10), trapDarkMaterial);
-  heldTrapBase.position.y = -0.05;
-  heldBearTrap.add(heldTrapBase);
-  carriedPlaceableModels.bearTrap = heldBearTrap;
-
-  for (const [kind, model] of Object.entries(carriedPlaceableModels)) {
-    model.position.set(0.04, -1.02, 0.16);
-    model.rotation.set(0.28, 0.35, 0.18);
-    model.scale.setScalar(0.34);
-    model.visible = false;
-    model.userData.carriedPlaceable = kind;
-    leftArm.add(model);
-  }
-}
 
 function updateBearTraps(delta) {
   for (const trap of placedTraps) {
@@ -2593,6 +2661,47 @@ function updateGrinder(delta) {
 }
 
 
+const flyingItems = [];
+
+function spawnFlyingItem(type, target, onArrive) {
+  const mesh = makeGroundItemMesh(type);
+  const start = new THREE.Vector3(
+    player.position.x,
+    player.position.y + 1.1,
+    player.position.z
+  );
+  mesh.position.copy(start);
+  mesh.scale.setScalar(0.9);
+  world.add(mesh);
+  flyingItems.push({
+    mesh,
+    start,
+    target: target.clone(),
+    t: 0,
+    duration: 0.45,
+    onArrive
+  });
+  playPickupSound();
+}
+
+function updateFlyingItems(delta) {
+  for (let i = flyingItems.length - 1; i >= 0; i -= 1) {
+    const flight = flyingItems[i];
+    flight.t += delta;
+    const p = clamp(flight.t / flight.duration, 0, 1);
+    const eased = p * p * (3 - 2 * p);
+    flight.mesh.position.lerpVectors(flight.start, flight.target, eased);
+    flight.mesh.position.y += Math.sin(p * Math.PI) * 0.75;
+    flight.mesh.rotation.y += delta * 8;
+    flight.mesh.scale.setScalar(0.9 - p * 0.5);
+    if (p >= 1) {
+      world.remove(flight.mesh);
+      flyingItems.splice(i, 1);
+      if (flight.onArrive) flight.onArrive();
+    }
+  }
+}
+
 function updateGroundItems(delta) {
   const now = performance.now();
 
@@ -2613,17 +2722,32 @@ function updateGroundItems(delta) {
         item.carried = false;
         continue;
       }
-      const angle = player.rotation.y + Math.PI + Math.sin(now * 0.0012) * 0.05;
-      const distance = 0.95;
-      const targetX = player.position.x + Math.sin(angle) * distance;
-      const targetZ = player.position.z + Math.cos(angle) * distance;
-      const targetY = getGroundHeight(targetX, targetZ) + 0.52
-        + Math.sin(now * 0.003) * 0.04;
-      const damping = 1 - Math.exp(-8 * delta);
+      // Keep the dragged item on the camera's right side as it orbits the player.
+      const yaw = state.cameraYaw;
+      const forwardX = Math.sin(yaw);
+      const forwardZ = Math.cos(yaw);
+      const rightX = -Math.cos(yaw);
+      const rightZ = Math.sin(yaw);
+      const bob = Math.sin(now * 0.003) * 0.05;
+      const targetX = player.position.x + rightX * 0.98 + forwardX * 0.22;
+      const targetZ = player.position.z + rightZ * 0.98 + forwardZ * 0.22;
+      const targetY = player.position.y + 1.0 + bob;
+      const damping = 1 - Math.exp(-10 * delta);
       item.mesh.position.x += (targetX - item.mesh.position.x) * damping;
       item.mesh.position.y += (targetY - item.mesh.position.y) * damping;
       item.mesh.position.z += (targetZ - item.mesh.position.z) * damping;
-      item.mesh.rotation.y += delta * 1.25;
+      // Keep the carried model outside the character while its lagging anchor
+      // swings around during quick camera turns.
+      const fromPlayerX = item.mesh.position.x - player.position.x;
+      const fromPlayerZ = item.mesh.position.z - player.position.z;
+      const horizontalDistance = Math.hypot(fromPlayerX, fromPlayerZ);
+      const minCarryDistance = 0.82;
+      if (horizontalDistance < minCarryDistance) {
+        const scale = minCarryDistance / Math.max(horizontalDistance, 0.001);
+        item.mesh.position.x = player.position.x + fromPlayerX * scale;
+        item.mesh.position.z = player.position.z + fromPlayerZ * scale;
+      }
+      item.mesh.rotation.y += delta * 0.8;
       continue;
     }
 
@@ -3215,6 +3339,7 @@ const state = {
   idleTime: 0,
   moveSpeed: 0,
   backpack: { wood: 0, sapling: 0, berry: 0, iron: 0 },
+  sackOrder: [],
   backpackCapacity: DEFAULT_BACKPACK_CAPACITY,
   goodSack: false,
   goodAxe: false,
@@ -3343,8 +3468,6 @@ function updateHud() {
   hungerFill.style.width = `${hungerPercent}%`;
   hungerFill.classList.toggle('low', hungerPercent <= 30);
 
-  dropBtn.style.display = heldItem ? 'flex' : 'none';
-  plantBtn.style.display = heldItem && heldItem.type === 'sapling' ? 'flex' : 'none';
   updateActionButtons();
   updateHotbarLabels();
   updatePlaceButton();
@@ -3360,35 +3483,41 @@ function updateHud() {
   renderInventory();
 }
 
+const CONTEXT_SLOTS = ['slot-a', 'slot-b', 'slot-c', 'slot-d', 'slot-e', 'slot-f'];
+const contextButtons = [placeBtn, plantBtn, eatBtn, storeBtn, unstoreBtn, grinderBtn, fireBtn];
+
 function updateActionButtons() {
-  const label = dropBtn.querySelector('span');
-  if (!label) return;
-  let text = 'DROP';
-  let mode = '';
-  if (heldItem) {
-    const nearGrinder = getGrinderDistance() <= GRINDER_RANGE;
-    const nearFire = getCampfireDistance() <= FIRE_FEED_RANGE;
-    if (nearGrinder) {
-      if (heldItem.type === 'wood' || heldItem.type === 'iron') {
-        text = 'PUT IN GRINDER';
-        mode = 'grinder';
-      } else {
-        text = "CAN'T GRIND THIS";
-        mode = 'blocked';
-      }
-    } else if (nearFire) {
-      if (heldItem.type === 'wood') {
-        text = 'PUT IN FIRE';
-        mode = 'fire';
-      } else {
-        text = 'ONLY LOGS BURN';
-        mode = 'blocked';
-      }
-    }
+  const dragging = !!heldItem;
+  const type = heldItem?.type;
+  const sackEquipped = isBackpackEquipped();
+  const canUnstore = sackEquipped && state.sackOrder.length > 0;
+  const nearGrinder = dragging && (type === 'wood' || type === 'iron')
+    && getGrinderDistance() <= GRINDER_RANGE;
+  const nearFire = dragging && type === 'wood'
+    && getCampfireDistance() <= FIRE_FEED_RANGE;
+
+  undragBtn.classList.toggle('available', dragging);
+
+  const visible = [];
+  if (nearGrinder) visible.push(grinderBtn);
+  if (nearFire) visible.push(fireBtn);
+  if (dragging && sackEquipped) visible.push(storeBtn);
+  if (dragging && type === 'sapling') visible.push(plantBtn);
+  if (dragging && type === 'berry') visible.push(eatBtn);
+  if (canUnstore) visible.push(unstoreBtn);
+  if (state.carriedPlaceable) visible.push(placeBtn);
+
+  for (const button of contextButtons) {
+    button.classList.remove('available', ...CONTEXT_SLOTS);
   }
-  label.textContent = text;
-  dropBtn.classList.toggle('action-ready', mode === 'grinder' || mode === 'fire');
-  dropBtn.classList.toggle('action-blocked', mode === 'blocked');
+  visible.forEach((button, index) => {
+    button.classList.add('available', CONTEXT_SLOTS[index] || CONTEXT_SLOTS[CONTEXT_SLOTS.length - 1]);
+  });
+
+  const handsFull = dragging;
+  unstoreBtn.disabled = handsFull;
+  const unstoreLabel = unstoreBtn.querySelector('span');
+  if (unstoreLabel) unstoreLabel.textContent = handsFull ? 'HANDS FULL' : 'UNSTORE';
 }
 
 function updateFireHud() {
@@ -3520,6 +3649,7 @@ function setInventoryOpen(open) {
 function takeOutItem(type) {
   if (!state.started || state.gameOver || state.falling) return;
   if (state.backpack[type] <= 0) return;
+  removeLastSackItem(type);
   state.backpack[type] -= 1;
   const x = player.position.x + Math.sin(player.rotation.y) * 1.35;
   const z = player.position.z + Math.cos(player.rotation.y) * 1.35;
@@ -3532,6 +3662,7 @@ function takeOutItem(type) {
 function eatBackpackBerry() {
   if (!state.started || state.gameOver || state.falling) return;
   if (state.backpack.berry <= 0) return;
+  removeLastSackItem('berry');
   state.backpack.berry -= 1;
   state.hunger = clamp(state.hunger + BERRY_HUNGER, 0, 100);
   updateHud();
@@ -3542,12 +3673,6 @@ function equipTool(tool) {
   if (!state.started || state.gameOver || state.falling || state.paused) return;
   if (tool !== 'backpack' && !state.ownedTools[tool]) {
     showToast(`Craft the ${ITEM_NAMES[tool] || 'tool'} first`);
-    return;
-  }
-
-  if (tool === 'backpack' && state.equippedTool === 'backpack') {
-    setInventoryOpen(!state.inventoryOpen);
-    updateToolUi();
     return;
   }
 
@@ -3854,6 +3979,7 @@ function startGame() {
   state.backpack.sapling = 0;
   state.backpack.berry = 0;
   state.backpack.iron = 0;
+  state.sackOrder = [];
   state.ownedTools.axe = true;
   state.ownedTools.pickaxe = false;
   state.ownedTools.torch = false;
@@ -3964,7 +4090,8 @@ window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   if (blockedKeys.has(key)) event.preventDefault();
   if (key === 'q' && !event.repeat) plantSapling();
-  if (key === 'f' && !event.repeat) dropCarriedItems();
+  if (key === 'f' && !event.repeat) undragItem();
+  if (key === 'e' && !event.repeat) eatDraggedItem();
   if (key === '1' && !event.repeat) equipTool(state.ownedTools.ironAxe ? 'ironAxe' : 'axe');
   if (key === '2' && !event.repeat) equipTool('backpack');
   if (key === '3' && !event.repeat) equipTool('pickaxe');
@@ -3991,13 +4118,45 @@ window.addEventListener('blur', () => {
   state.jumpHeld = false;
 });
 
-dropBtn.addEventListener('pointerdown', (event) => {
+undragBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  dropCarriedItems();
+  event.stopPropagation();
+  undragItem();
+});
+
+storeBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  storeDraggedItem();
+});
+
+unstoreBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  unstoreLastItem();
+});
+
+eatBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  eatDraggedItem();
+});
+
+grinderBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  putInGrinder();
+});
+
+fireBtn.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  putLogInFire();
 });
 
 plantBtn.addEventListener('pointerdown', (event) => {
   event.preventDefault();
+  event.stopPropagation();
   plantSapling();
 });
 
@@ -4211,7 +4370,7 @@ function applyTapInteraction(owner) {
     case 'grinder': {
       if (getGrinderDistance() > TAP_REACH) return tooFar();
       flashOutline(grinder);
-      showToast('Hold a log or iron and press Drop');
+      showToast('Drag a log or iron and press Put in grinder');
       return;
     }
     case 'campfire': {
@@ -4274,18 +4433,6 @@ function harvestBerryBush(bush) {
   }
   bush.nextHarvest = now + 4500;
 
-  if (isBackpackEquipped()) {
-    if (backpackCount() >= state.backpackCapacity) {
-      showToast('Backpack is full');
-      return;
-    }
-    state.backpack.berry += 1;
-    updateHud();
-    playPickupSound();
-    showToast('+1 berry');
-    return;
-  }
-
   if (heldItem) {
     showToast('Hands full');
     return;
@@ -4300,10 +4447,10 @@ function harvestBerryBush(bush) {
 
 function tapCampfire() {
   if (state.fireOut) {
-    showToast('The fire is out — hold a log and press Drop');
+    showToast('The fire is out — drag a log and press Put in fire');
     return;
   }
-  showToast('Hold a log and press Drop to feed the fire');
+  showToast('Drag a log and press Put in fire to feed the fire');
 }
 
 function setJumpHeld(held) {
@@ -5281,6 +5428,45 @@ function projectPrompt(element, worldPos) {
   return true;
 }
 
+const handLabelVec = new THREE.Vector3();
+
+function updateHandLabels() {
+  const showLabels = state.started && !state.gameOver && !state.portrait;
+  const dragging = showLabels && !!heldItem && heldItem.popping <= 0;
+
+  dragLabel.classList.toggle('visible', dragging);
+  if (dragging) {
+    const type = heldItem.type;
+    dragName.textContent = DRAG_NAMES[type] || ITEM_NAMES[type] || 'Item';
+
+    const flameCount = ITEM_FLAMES[type] || 0;
+    if (dragFlames.dataset.count !== String(flameCount)) {
+      dragFlames.dataset.count = String(flameCount);
+      dragFlames.replaceChildren();
+      for (let i = 0; i < flameCount; i += 1) {
+        const flame = document.createElement('span');
+        flame.className = 'drag-flame';
+        dragFlames.appendChild(flame);
+      }
+    }
+
+    // The label floats just above the dragged item and always faces the camera
+    // because it is screen-space HTML layered over the 3D scene.
+    handLabelVec.copy(heldItem.mesh.position);
+    handLabelVec.y += 0.62;
+    if (!projectPrompt(dragLabel, handLabelVec)) dragLabel.classList.remove('visible');
+  }
+
+  const showSack = showLabels && isBackpackEquipped() && !state.firstPerson;
+  sackCounter.classList.toggle('visible', showSack);
+  if (showSack) {
+    sackCounter.textContent = `${backpackCount()}/${state.backpackCapacity}`;
+    handLabelVec.copy(player.position);
+    handLabelVec.y += 2.4;
+    if (!projectPrompt(sackCounter, handLabelVec)) sackCounter.classList.remove('visible');
+  }
+}
+
 function updateWorldPrompts(delta) {
   if (state.startHintTimer > 0) {
     state.startHintTimer = Math.max(0, state.startHintTimer - delta);
@@ -5303,6 +5489,8 @@ function updateWorldPrompts(delta) {
     const target = new THREE.Vector3(bench.position.x, bench.position.y + 1.75, bench.position.z);
     if (!projectPrompt(benchPrompt, target)) benchPrompt.classList.add('hidden');
   }
+
+  updateHandLabels();
 }
 
 // ---------- Generated audio ----------
@@ -5923,7 +6111,6 @@ if (import.meta.env.DEV) {
     startEnemyFade,
     plantSapling,
     attack,
-    dropCarriedItems,
     pickUpItem,
     addItemToBackpack,
     equipTool,
