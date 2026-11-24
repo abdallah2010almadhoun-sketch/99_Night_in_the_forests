@@ -97,17 +97,17 @@ const clock = new THREE.Clock();
 const world = new THREE.Group();
 scene.add(world);
 
-const BENCH_POSITION = new THREE.Vector3(9.6, 0, 10.2);
-const GRINDER_POSITION = new THREE.Vector3(13.8, 0, 5.0);
-const WELL_POSITION = new THREE.Vector3(-10.5, 0, 6.2);
-const POND_POSITION = new THREE.Vector3(8.0, 0, -11.0);
-const NOTICE_POSITION = new THREE.Vector3(-6.5, 0, -8.2);
+const BENCH_POSITION = new THREE.Vector3(5.6, 0, 5.4);
+const GRINDER_POSITION = new THREE.Vector3(7.6, 0, 1.9);
+const WELL_POSITION = new THREE.Vector3(-8.2, 0, 4.6);
+const POND_POSITION = new THREE.Vector3(6.8, 0, -8.8);
+const NOTICE_POSITION = new THREE.Vector3(-5.6, 0, -7.4);
 const CAMP_PROP_LAYOUT = [
-  { x: BENCH_POSITION.x, z: BENCH_POSITION.z, r: 3.4 },
-  { x: GRINDER_POSITION.x, z: GRINDER_POSITION.z, r: 2.8 },
-  { x: WELL_POSITION.x, z: WELL_POSITION.z, r: 3.6 },
-  { x: POND_POSITION.x, z: POND_POSITION.z, r: 5.2 },
-  { x: NOTICE_POSITION.x, z: NOTICE_POSITION.z, r: 2.8 }
+  { x: BENCH_POSITION.x, z: BENCH_POSITION.z, r: 2.4 },
+  { x: GRINDER_POSITION.x, z: GRINDER_POSITION.z, r: 1.8 },
+  { x: WELL_POSITION.x, z: WELL_POSITION.z, r: 2.4 },
+  { x: POND_POSITION.x, z: POND_POSITION.z, r: 3.6 },
+  { x: NOTICE_POSITION.x, z: NOTICE_POSITION.z, r: 1.8 }
 ];
 
 function nearCampProp(x, z, padding = 0) {
@@ -157,7 +157,7 @@ const ARMED_WALK_FACTOR = 0.34;
 // broad, easy-to-climb slopes farther out in the forest.
 function getGroundHeight(x, z) {
   const radius = Math.hypot(x, z);
-  const flatCenter = Math.min(Math.max((radius - 7) / 11, 0), 1);
+  const flatCenter = Math.min(Math.max((radius - 14) / 8, 0), 1);
   const waves = Math.sin(x * 0.11 + 0.7) * Math.cos(z * 0.1 - 0.35) * 0.55
     + Math.sin((x + z) * 0.055 - 0.6) * 0.35
     + Math.sin(x * 0.024 - z * 0.019) * 0.22;
@@ -273,14 +273,19 @@ function createTree(x, z, scale = 1) {
   return tree;
 }
 
-for (let i = 0; i < 64; i += 1) {
-  const angle = Math.random() * Math.PI * 2;
-  const radius = 13 + Math.random() * 28;
-  const x = Math.cos(angle) * radius;
-  const z = Math.sin(angle) * radius;
-  if (Math.abs(x) < 6 && Math.abs(z) < 6) continue;
-  if (nearCampProp(x, z, 2.4)) continue;
-  createTree(x, z, 0.8 + Math.random() * 1.2);
+for (let i = 0; i < 18; i += 1) {
+  let placed = false;
+  for (let attempt = 0; attempt < 40 && !placed; attempt += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 9 + Math.random() * 5.2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+    if (nearCampProp(x, z, 1.4)) continue;
+    if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 2.1)) continue;
+    createTree(x, z, 0.8 + Math.random());
+    placed = true;
+  }
 }
 
 // Only a share of the forest can be chopped. The closest trees are always
@@ -893,6 +898,27 @@ for (let i = 0; i < 15; i += 1) {
   }
 }
 
+// Guarantee a few harvestable bushes in the small opening arena even when the
+// random scatter happens to land most of them beyond the wall.
+const arenaBushSpots = [
+  [-12.5, 6.8],
+  [12.8, -7.4],
+  [-6.0, 12.5]
+];
+for (const [spotX, spotZ] of arenaBushSpots) {
+  let placed = false;
+  for (let attempt = 0; attempt < 12 && !placed; attempt += 1) {
+    const x = spotX + (Math.random() - 0.5) * 1.6;
+    const z = spotZ + (Math.random() - 0.5) * 1.6;
+    if (Math.hypot(x, z) > 15.5) continue;
+    if (nearCampProp(x, z, 1.4)) continue;
+    if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 1.8)) continue;
+    if (berryBushes.some((bush) => Math.hypot(bush.x - x, bush.z - z) < 2.4)) continue;
+    addBerryBush(x, z);
+    placed = true;
+  }
+}
+
 // ---------- Iron rocks ----------
 
 const ironRocks = [];
@@ -979,12 +1005,14 @@ function findRockSpot(x, z, scale) {
   return true;
 }
 
+// Keep the starting ring's iron inside the 16 m camp footprint so the first
+// arena has every listed resource without crowding the 20 m wall.
 const rockClusters = [
-  [17, -8], [-19, 12], [10, 24], [-25, -16], [26, 14], [-13, -24]
+  [11.8, -5.2], [-12.6, -4.2], [7.8, 10.8], [-8.4, -10.2]
 ];
 for (const [clusterX, clusterZ] of rockClusters) {
   let placed = 0;
-  for (let attempt = 0; attempt < 18 && placed < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 26 && placed < 2; attempt += 1) {
     const angle = Math.random() * Math.PI * 2;
     const radius = Math.random() * 2.7;
     const x = clusterX + Math.cos(angle) * radius;
@@ -994,6 +1022,33 @@ for (const [clusterX, clusterZ] of rockClusters) {
     createIronRock(x, z, scale);
     placed += 1;
   }
+}
+
+// A handful of plain gray stones break up the grass between the landmarks.
+const arenaStoneMaterial = new THREE.MeshStandardMaterial({
+  color: 0x6a7472,
+  roughness: 0.98,
+  flatShading: true
+});
+const arenaStoneSpots = [
+  [10.5, 7.5, 1.15],
+  [-12.2, 2.2, 0.95],
+  [-3.8, 12.3, 1.05],
+  [2.0, -13.5, 0.85],
+  [-10.8, -8.0, 0.78]
+];
+for (const [x, z, scale] of arenaStoneSpots) {
+  if (nearCampProp(x, z, 1.0)) continue;
+  if (treeData.some((tree) => Math.hypot(tree.position.x - x, tree.position.z - z) < 1.5)) continue;
+  if (ironRocks.some((rock) => Math.hypot(rock.x - x, rock.z - z) < 1.8)) continue;
+  const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.52 * scale, 0), arenaStoneMaterial);
+  stone.position.set(x, getGroundHeight(x, z) + 0.25 * scale, z);
+  stone.scale.set(1.15, 0.62, 0.95);
+  stone.rotation.set(Math.random() * 0.35, Math.random() * Math.PI, Math.random() * 0.25);
+  stone.castShadow = true;
+  stone.receiveShadow = true;
+  world.add(stone);
+  solidProps.push({ x, z, radius: 0.44 * scale, type: 'stone' });
 }
 
 // ---------- Crafting bench & grinder ----------
@@ -1537,8 +1592,8 @@ const BENCH_INTERACT_RANGE = 4;
 const TREE_INTERACT_RANGE = 2.5;
 const FIRE_LEVEL_MAX = 5;
 const FIRE_LEVELUP_RESET = 50;
-const ARENA_RADIUS_START = 50;
-const ARENA_RADIUS_BY_LEVEL = { 1: 50, 2: 250, 3: 450, 4: 650, 5: 850 };
+const ARENA_RADIUS_START = 20;
+const ARENA_RADIUS_BY_LEVEL = { 1: 20, 2: 220, 3: 420, 4: 620, 5: 820 };
 const FIRE_GAIN_PER_LOG = { 1: 30, 2: 12, 3: 5, 4: 3, 5: 2 };
 const FIRE_DRAIN_PER_MINUTE = { 1: 10, 2: 4, 3: 2, 4: 1.2, 5: 0.8 };
 const FIRE_SAFE_RADII = { 1: 8, 2: 12, 3: 16, 4: 20, 5: 26 };
@@ -3493,7 +3548,9 @@ function updateFireBar(delta) {
   if (!visible) return;
 
   const flameHeight = FIRE_FLAME_HEIGHTS[state.fireLevel] || 1;
-  fireBar.position.set(0, 2.55 + flameHeight, 0);
+  // Keep the bar a few metres above the flame without letting the huge level-5
+  // bonfire push its text off the top of a normal third-person view.
+  fireBar.position.set(0, Math.min(2.55 + flameHeight, 6.05), 0);
 
   if (state.fireBarMessageTimer <= 0 && fireBarLastProgress !== Math.round(state.fireProgress)) {
     fireBarDirty = true;
@@ -3650,6 +3707,45 @@ const arenaWallBaseMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.0,
   side: THREE.DoubleSide
 });
+
+// The wall is 60 m tall, but its top must read as lost in the sky even after
+// the map opens up and the fog thins. A soft vertical wash handles that
+// independently of camera distance.
+function createWallTopFadeTexture() {
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 8;
+  canvasEl.height = 256;
+  const g = canvasEl.getContext('2d');
+  const gradient = g.createLinearGradient(0, 0, 0, 256);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.42, 'rgba(255, 255, 255, 0.82)');
+  gradient.addColorStop(0.72, 'rgba(255, 255, 255, 0.34)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 8, 256);
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+const wallTopFadeMaterial = new THREE.MeshBasicMaterial({
+  map: createWallTopFadeTexture(),
+  color: 0x87a9a5,
+  transparent: true,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  fog: false
+});
+const wallTopFadeInner = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 96, 1, true),
+  wallTopFadeMaterial
+);
+const wallTopFadeOuter = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 96, 1, true),
+  wallTopFadeMaterial
+);
+wallTopFadeInner.renderOrder = 3;
+wallTopFadeOuter.renderOrder = 3;
+
 const arenaWall = new THREE.Group();
 const arenaWallInner = new THREE.Mesh(
   new THREE.CylinderGeometry(1, 1, 1, 96, 1, true),
@@ -3668,7 +3764,9 @@ arenaWallOuter.position.y = WALL_HEIGHT / 2;
 arenaWallInner.receiveShadow = true;
 arenaWallOuter.receiveShadow = true;
 arenaWallBase.receiveShadow = true;
-arenaWall.add(arenaWallInner, arenaWallOuter, arenaWallBase);
+wallTopFadeInner.position.y = WALL_HEIGHT * 0.68;
+wallTopFadeOuter.position.y = WALL_HEIGHT * 0.68;
+arenaWall.add(arenaWallInner, arenaWallOuter, arenaWallBase, wallTopFadeInner, wallTopFadeOuter);
 world.add(arenaWall);
 
 let arenaWallRadius = ARENA_RADIUS_START;
@@ -3729,6 +3827,15 @@ function updateWallVisual() {
   arenaWallOuter.scale.set(arenaWallRadius + WALL_THICKNESS, WALL_HEIGHT, arenaWallRadius + WALL_THICKNESS);
   arenaWallBase.scale.set(arenaWallRadius - 0.04, 2.6, arenaWallRadius - 0.04);
   arenaWallBase.position.y = 1.3;
+  const fadeHeight = WALL_HEIGHT * 0.64;
+  wallTopFadeInner.scale.set(arenaWallRadius - 0.06, fadeHeight, arenaWallRadius - 0.06);
+  wallTopFadeOuter.scale.set(
+    arenaWallRadius + WALL_THICKNESS + 0.06,
+    fadeHeight,
+    arenaWallRadius + WALL_THICKNESS + 0.06
+  );
+  wallTopFadeInner.position.y = WALL_HEIGHT * 0.68;
+  wallTopFadeOuter.position.y = WALL_HEIGHT * 0.68;
   arenaWallTexture.repeat.x = Math.max(24, Math.round(arenaWallRadius * 0.62));
 }
 
@@ -3742,7 +3849,13 @@ function updateArenaWall(delta) {
     if (t >= 1) wallExpansion = null;
   }
 
-  wallShake = Math.max(0, wallShake - delta * 0.055);
+  if (wallExpansion) {
+    // Ease the initial jolt down to a gentle tremor that lasts for the whole
+    // eight-second slide instead of stopping after the first couple of seconds.
+    wallShake = Math.max(0.06, wallShake - delta * 0.018);
+  } else {
+    wallShake = Math.max(0, wallShake - delta * 0.055);
+  }
 
   if (wallDust.visible) {
     let alive = 0;
@@ -3821,7 +3934,9 @@ function ensureForestRingQueued(level) {
   if (outer <= inner) return;
 
   const bands = level >= 4 ? 3 : 2;
-  const sectors = 10;
+  // Six wide sectors keep the instanced forest to a handful of draw calls per
+  // ring while still letting the renderer cull what is behind the camera.
+  const sectors = 6;
   for (let band = 0; band < bands; band += 1) {
     const rMin = inner + ((outer - inner) * band) / bands;
     const rMax = inner + ((outer - inner) * (band + 1)) / bands;
@@ -3884,8 +3999,8 @@ function buildForestChunk(job) {
   const chunk = new THREE.Group();
   const angularWidth = job.a1 - job.a0;
   const area = 0.5 * (job.rMax * job.rMax - job.rMin * job.rMin) * angularWidth;
-  const densityDivisor = 135 - (job.level - 2) * 20;
-  const treeCount = Math.min(260, Math.max(10, Math.floor(area / densityDivisor)));
+  const densityDivisor = 150 - (job.level - 2) * 18;
+  const treeCount = Math.min(220, Math.max(10, Math.floor(area / densityDivisor)));
 
   const pondCount = job.level >= 2 && Math.random() < 0.5 ? 1 : 0;
   const pondSpots = [];
@@ -6206,7 +6321,12 @@ function applyDayNightVisuals() {
 
   workColorB.copy(fogDayColor).lerp(fogNightColor, nightFactor);
   scene.fog.color.copy(workColorB);
-  scene.fog.density = 0.014 + nightFactor * 0.042;
+  wallTopFadeMaterial.color.copy(workColorB);
+  // Keep the starting arena cloaked, then let the daytime view reach farther
+  // as the wall retreats so the player can actually watch it slide outward.
+  // Night stays deliberately close and murky at every level.
+  const fogScale = Math.pow(ARENA_RADIUS_START / Math.max(ARENA_RADIUS_START, arenaWallRadius), 0.62);
+  scene.fog.density = 0.014 * fogScale + nightFactor * 0.042;
 
   ambient.color.copy(ambientDayColor).lerp(ambientNightColor, nightFactor);
   ambient.intensity = 1.0 - nightFactor * 0.45;
@@ -7049,6 +7169,7 @@ function animate() {
       updateInteractionTarget();
       updateTrees(delta);
       updateGroundItems(delta);
+      updateFlyingItems(delta);
       updatePlantedSaplings(delta);
       updateCampfire(delta);
       updateGrinder(delta);
@@ -7118,6 +7239,7 @@ if (import.meta.env.DEV) {
     lantern,
     treeData,
     groundItems,
+    flyingItems,
     berryBushes,
     plantedSaplings,
     spawnGroundItem,
@@ -7149,6 +7271,7 @@ if (import.meta.env.DEV) {
     startGame,
     showToast,
     ironRocks,
+    solidProps,
     bench,
     grinder,
     benchState,

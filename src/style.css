@@ -195,60 +195,9 @@ button {
   background: linear-gradient(135deg, #cdd7dc 0 46%, #b96a33 48% 68%, #8f9ca2 70%);
 }
 
-.fire-panel {
-  min-width: 190px;
-  padding: 8px 11px;
-}
-
-.fuel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.fuel-value {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--gold);
-}
-
-.fuel-track {
-  margin-top: 5px;
-  height: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.13);
-}
-
-.fuel-fill {
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #4fcf83, #8aec9b);
-  box-shadow: 0 0 10px rgba(116, 236, 155, 0.55);
-  transition: width 0.25s linear, background 0.4s ease;
-}
-
-.fuel-fill.low {
-  background: linear-gradient(90deg, #e08d2a, #ffba58);
-  box-shadow: 0 0 10px rgba(255, 186, 88, 0.55);
-}
-
-.fuel-fill.critical {
-  background: linear-gradient(90deg, #c92f2f, #ff5d5d);
-  box-shadow: 0 0 12px rgba(255, 93, 93, 0.65);
-  animation: fuelPulse 0.9s ease-in-out infinite alternate;
-}
-
 @keyframes fuelPulse {
   from { opacity: 0.7; }
   to { opacity: 1; }
-}
-
-.fire-panel .status {
-  margin-top: 4px;
 }
 
 .vitals-panel {
@@ -1052,10 +1001,6 @@ button {
     min-width: 132px;
   }
 
-  .fire-panel {
-    min-width: 160px;
-  }
-
   .panel.center {
     max-width: 260px;
   }
@@ -1077,7 +1022,6 @@ button {
     font-size: 10px;
   }
 
-  .fuel-track,
   .health-track,
   .hunger-track {
     height: 6px;
@@ -1184,10 +1128,6 @@ button {
     min-width: 124px;
   }
 
-  .fire-panel {
-    min-width: 142px;
-  }
-
   .counter .label {
     display: none;
   }
@@ -1255,10 +1195,6 @@ button {
   .label {
     font-size: 8px;
     letter-spacing: 0.1em;
-  }
-
-  .fire-panel .status {
-    font-size: 8px;
   }
 }
 
