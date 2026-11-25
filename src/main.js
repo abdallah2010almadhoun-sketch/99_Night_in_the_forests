@@ -815,6 +815,14 @@ for (let i = 0; i < 8; i += 1) {
 const plantedSaplings = [];
 const groundItems = [];
 let heldItem = null;
+
+// A dragged item floats directly in front of the character at chest height.
+// If a trunk or rising ground interrupts that line it slides closer instead of
+// clipping through it.
+const CARRY_DISTANCE = 1.2;
+const CARRY_MIN_DISTANCE = 0.7;
+const CARRY_CHEST_HEIGHT = 1.15;
+const CARRY_ITEM_RADIUS = 0.42;
 const berryBushes = [];
 const logGeometry = new THREE.CylinderGeometry(0.15, 0.17, 0.72, 7);
 const logMaterial = new THREE.MeshStandardMaterial({
@@ -1612,7 +1620,7 @@ const MAX_ENEMIES = 30;
 const PICKUP_RANGE = 3.35;
 const CARRY_LIMIT = 1;
 const DEFAULT_BACKPACK_CAPACITY = 5;
-const GOOD_SACK_CAPACITY = 10;
+const GOOD_SACK_CAPACITY = 15;
 const HUNGER_DRAIN_PER_SECOND = 0.42;
 const BERRY_HUNGER = 18;
 const EQUIP_TIME = 0.3;
@@ -1659,7 +1667,7 @@ const RECIPES = [
   { id: 'torch', tier: 1, name: 'Torch', icon: '🔥', cost: { wood: 2, iron: 1 }, desc: 'A warm light to carry into the dark.', kind: 'tool', repeatable: true },
   { id: 'bench2', tier: 1, name: 'Crafting Bench 2', icon: '🛠', cost: { wood: 8, iron: 6 }, desc: 'Upgrade the bench to unlock tier 2 gear.', kind: 'bench', oneTime: true, benchTier: 2 },
   { id: 'ironAxe', tier: 2, name: 'Good Axe', icon: '🪓', cost: { wood: 6, iron: 3 }, desc: 'Chops faster and hits harder. Replaces the Old Axe.', kind: 'tool', oneTime: true },
-  { id: 'goodSack', tier: 2, name: 'Good Sack', icon: '🎒', cost: { wood: 6, iron: 5 }, desc: 'Sack capacity grows from 5 to 10.', kind: 'sack', oneTime: true },
+  { id: 'goodSack', tier: 2, name: 'Good Sack', icon: '🎒', cost: { wood: 6, iron: 5 }, desc: 'Sack capacity grows from 5 to 15.', kind: 'sack', oneTime: true },
   { id: 'logWall', tier: 2, name: 'Log Wall', icon: '🪵', cost: { wood: 12 }, desc: 'A sturdy wooden wall. Craft it, then place it.', kind: 'placeable', placeType: 'logWall', repeatable: true },
   { id: 'bearTrap', tier: 2, name: 'Bear Trap', icon: '⚙', cost: { iron: 3 }, desc: 'Damages and stuns a monster that steps on it.', kind: 'placeable', placeType: 'bearTrap', repeatable: true, trap: true },
   { id: 'bench3', tier: 2, name: 'Crafting Bench 3', icon: '🛠', cost: { wood: 15, iron: 10 }, desc: 'Upgrade the bench to unlock tier 3 gear.', kind: 'bench', oneTime: true, benchTier: 3 },
@@ -2134,14 +2142,21 @@ function pickUpItem(item) {
   item.landed = true;
   item.pickupDelay = 0;
   heldItem = item;
-  // Place the item on the camera-facing side immediately; subsequent camera
-  // turns use the damped follow in updateGroundItems.
+  // Place the item directly in front of the character immediately; subsequent
+  // camera turns use the damped follow in updateGroundItems.
   const yaw = state.cameraYaw;
+  const forwardX = Math.sin(yaw);
+  const forwardZ = Math.cos(yaw);
+  const reach = carriedItemReach(forwardX, forwardZ, CARRY_DISTANCE);
+  const x = player.position.x + forwardX * reach;
+  const z = player.position.z + forwardZ * reach;
   item.mesh.position.set(
-    player.position.x - Math.cos(yaw) * 0.98 + Math.sin(yaw) * 0.22,
-    player.position.y + 1.0,
-    player.position.z + Math.sin(yaw) * 0.98 + Math.cos(yaw) * 0.22
+    x,
+    Math.max(player.position.y + CARRY_CHEST_HEIGHT, getGroundHeight(x, z) + 0.46),
+    z
   );
+  item.lastCarryPlayerX = player.position.x;
+  item.lastCarryPlayerZ = player.position.z;
   updateHud();
   playPickupSound();
   showToast(`Picked up ${DRAG_NAMES[item.type] || ITEM_NAMES[item.type]}`);
@@ -2977,6 +2992,42 @@ function updateFlyingItems(delta) {
   }
 }
 
+// The furthest reach from the player along `dir` that keeps the carried item
+// out of tree trunks and above the local ground. Blocked space makes it slide
+// toward the chest rather than intersect anything.
+function carriedItemReach(dirX, dirZ, maxDistance) {
+  const px = player.position.x;
+  const pz = player.position.z;
+  let allowed = maxDistance;
+
+  for (const tree of treeData) {
+    if (!tree.visible || tree.userData.falling) continue;
+    const ox = tree.position.x - px;
+    const oz = tree.position.z - pz;
+    const along = ox * dirX + oz * dirZ;
+    if (along <= 0 || along > maxDistance + 2.2) continue;
+    const perpSq = ox * ox + oz * oz - along * along;
+    const radius = tree.userData.scale * 0.3 + CARRY_ITEM_RADIUS;
+    if (perpSq >= radius * radius) continue;
+    const back = Math.sqrt(radius * radius - perpSq);
+    allowed = Math.min(allowed, along - back);
+  }
+
+  const chestY = player.position.y + CARRY_CHEST_HEIGHT;
+  const furthest = Math.min(maxDistance, Math.max(CARRY_MIN_DISTANCE, allowed));
+  let clear = CARRY_MIN_DISTANCE;
+  for (let d = furthest; d >= CARRY_MIN_DISTANCE; d -= 0.08) {
+    const x = px + dirX * d;
+    const z = pz + dirZ * d;
+    if (getGroundHeight(x, z) + 0.46 <= chestY) {
+      clear = d;
+      break;
+    }
+  }
+
+  return clamp(Math.min(maxDistance, allowed, clear), CARRY_MIN_DISTANCE, maxDistance);
+}
+
 function updateGroundItems(delta) {
   const now = performance.now();
 
@@ -2997,31 +3048,73 @@ function updateGroundItems(delta) {
         item.carried = false;
         continue;
       }
-      // Keep the dragged item on the camera's right side as it orbits the player.
+      // Float the dragged item directly in front of the character at chest
+      // height. It follows the shared camera yaw, which is also the direction
+      // the character turns to while moving, so it always stays in front.
       const yaw = state.cameraYaw;
       const forwardX = Math.sin(yaw);
       const forwardZ = Math.cos(yaw);
-      const rightX = -Math.cos(yaw);
-      const rightZ = Math.sin(yaw);
-      const bob = Math.sin(now * 0.003) * 0.05;
-      const targetX = player.position.x + rightX * 0.98 + forwardX * 0.22;
-      const targetZ = player.position.z + rightZ * 0.98 + forwardZ * 0.22;
-      const targetY = player.position.y + 1.0 + bob;
-      const damping = 1 - Math.exp(-10 * delta);
-      item.mesh.position.x += (targetX - item.mesh.position.x) * damping;
-      item.mesh.position.y += (targetY - item.mesh.position.y) * damping;
-      item.mesh.position.z += (targetZ - item.mesh.position.z) * damping;
-      // Keep the carried model outside the character while its lagging anchor
-      // swings around during quick camera turns.
-      const fromPlayerX = item.mesh.position.x - player.position.x;
-      const fromPlayerZ = item.mesh.position.z - player.position.z;
-      const horizontalDistance = Math.hypot(fromPlayerX, fromPlayerZ);
-      const minCarryDistance = 0.82;
-      if (horizontalDistance < minCarryDistance) {
-        const scale = minCarryDistance / Math.max(horizontalDistance, 0.001);
-        item.mesh.position.x = player.position.x + fromPlayerX * scale;
-        item.mesh.position.z = player.position.z + fromPlayerZ * scale;
+      const reach = carriedItemReach(forwardX, forwardZ, CARRY_DISTANCE);
+      // Move with the character first so the damped offset only smooths the
+      // swing; otherwise walking leaves the item trailing behind the target.
+      if (item.lastCarryPlayerX !== undefined) {
+        item.mesh.position.x += player.position.x - item.lastCarryPlayerX;
+        item.mesh.position.z += player.position.z - item.lastCarryPlayerZ;
       }
+      item.lastCarryPlayerX = player.position.x;
+      item.lastCarryPlayerZ = player.position.z;
+      const bob = Math.sin(now * 0.003) * 0.05;
+      const targetX = player.position.x + forwardX * reach;
+      const targetZ = player.position.z + forwardZ * reach;
+      const targetY = Math.max(
+        player.position.y + CARRY_CHEST_HEIGHT + bob,
+        getGroundHeight(targetX, targetZ) + 0.46
+      );
+      // Damp the offset relative to the character, not the world position, so
+      // walking does not leave the item trailing at half the intended reach.
+      const damping = 1 - Math.exp(-10 * delta);
+      let offsetX = item.mesh.position.x - player.position.x;
+      let offsetZ = item.mesh.position.z - player.position.z;
+      offsetX += (forwardX * reach - offsetX) * damping;
+      offsetZ += (forwardZ * reach - offsetZ) * damping;
+      // Damping a rotating target cuts the chord and shortens the radius; keep
+      // the offset at the intended reach and let obstruction clamping shrink it.
+      const dampedLength = Math.hypot(offsetX, offsetZ);
+      if (dampedLength > 0.0001) {
+        const radiusScale = reach / dampedLength;
+        offsetX *= radiusScale;
+        offsetZ *= radiusScale;
+      }
+      item.mesh.position.x = player.position.x + offsetX;
+      item.mesh.position.z = player.position.z + offsetZ;
+      item.mesh.position.y += (targetY - item.mesh.position.y) * damping;
+      // The damped anchor can lag through a trunk on a fast spin, so clamp it
+      // to the current clear reach and keep it off the body.
+      let horizontalDistance = Math.hypot(offsetX, offsetZ);
+      if (horizontalDistance > 0.001) {
+        const clampReach = carriedItemReach(
+          offsetX / horizontalDistance,
+          offsetZ / horizontalDistance,
+          CARRY_DISTANCE
+        );
+        if (horizontalDistance > clampReach) {
+          const shrink = clampReach / horizontalDistance;
+          item.mesh.position.x = player.position.x + offsetX * shrink;
+          item.mesh.position.z = player.position.z + offsetZ * shrink;
+          offsetX *= shrink;
+          offsetZ *= shrink;
+          horizontalDistance = clampReach;
+        }
+      }
+      if (horizontalDistance < CARRY_MIN_DISTANCE) {
+        const grow = CARRY_MIN_DISTANCE / Math.max(horizontalDistance, 0.001);
+        item.mesh.position.x = player.position.x + offsetX * grow;
+        item.mesh.position.z = player.position.z + offsetZ * grow;
+      }
+      item.mesh.position.y = Math.max(
+        item.mesh.position.y,
+        getGroundHeight(item.mesh.position.x, item.mesh.position.z) + 0.4
+      );
       item.mesh.rotation.y += delta * 0.8;
       continue;
     }
@@ -3437,13 +3530,20 @@ let fireBarLastLevel = -1;
 let fireBarLastMessage = false;
 
 function fireBarColorFor(progress) {
+  // Value bands: 0-34 red, 35-52 orange, 53-62 yellow, 63-74 yellow-lime,
+  // 75-99 light lime-green, 100 bright green. Neighbouring stops differ just
+  // enough inside a band to read as a smooth gradient rather than flat steps.
   const stops = [
     { v: 0, c: [222, 58, 48] },
-    { v: 34, c: [235, 78, 42] },
-    { v: 35, c: [244, 132, 42] },
-    { v: 59, c: [249, 184, 50] },
-    { v: 60, c: [205, 230, 62] },
-    { v: 99, c: [166, 236, 70] },
+    { v: 34, c: [229, 62, 45] },
+    { v: 35, c: [244, 128, 40] },
+    { v: 52, c: [247, 158, 44] },
+    { v: 53, c: [250, 206, 53] },
+    { v: 62, c: [248, 222, 57] },
+    { v: 63, c: [208, 230, 62] },
+    { v: 74, c: [188, 234, 66] },
+    { v: 75, c: [160, 236, 72] },
+    { v: 99, c: [134, 238, 90] },
     { v: 100, c: [76, 255, 126] }
   ];
   const p = clamp(progress, 0, 100);
